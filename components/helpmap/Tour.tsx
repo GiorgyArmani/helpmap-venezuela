@@ -74,7 +74,7 @@ const SLIDES: Slide[] = [
   },
   {
     eyebrow: { es: "Paso 1", en: "Step 1" },
-    title: { es: "Explorá el mapa", en: "Explore the map" },
+    title: { es: "Explora el mapa", en: "Explore the map" },
     body: {
       es: "Toca un punto en el mapa o filtra por estado y centro. Verás quién está reportado en cada lugar.",
       en: "Tap a point on the map or filter by state and center. You'll see who is reported at each place.",
