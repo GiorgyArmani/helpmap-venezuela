@@ -53,9 +53,16 @@ export async function POST(request: Request) {
         source: "volunteer_web",
       }),
     });
-    if (!res.ok) return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 });
+    if (!res.ok) {
+      // Surface WHAT n8n returned so a 502 is diagnosable (e.g. 404 = webhook not
+      // registered → workflow not activated or wrong/test URL; 500 = a node failed).
+      const detail = await res.text().catch(() => "");
+      console.error(`[lists] upstream ${res.status} from n8n:`, detail.slice(0, 500));
+      return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 });
+    }
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) {
+    console.error("[lists] upstream unreachable:", e);
     return NextResponse.json({ error: "upstream_unreachable" }, { status: 502 });
   }
 }

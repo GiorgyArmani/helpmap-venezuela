@@ -29,6 +29,19 @@ export interface Location {
   active: boolean;
 }
 
+// `donations` table — community orgs/initiatives shown in the "Donar" panel.
+// Public reads (anon) see active rows; staff add/edit, admin deletes (db/donations.sql).
+export interface Donation {
+  id: string;
+  name: string;
+  description: string | null;
+  social_url: string | null;
+  donate_url: string | null;
+  donate_info: string | null;
+  sort: number;
+  active: boolean;
+}
+
 // `patients_public` view — already privacy-filtered at the DB layer:
 // no procedencia/servicio, ci_display = "MENOR" for minors, foto_url null
 // unless the record is an adult AND verified.
@@ -137,6 +150,10 @@ export interface Strings {
   volRevoke: string; volRevoked: string; volNone: string; volReviewNote: string;
   listTitle: string; listHint: string; listPick: string; listSending: string;
   listSent: string; listError: string; listNote: string;
+  tabDonations: string; addDonation: string; editDonation: string; savedDon: string;
+  f_donName: string; f_donDesc: string; f_donSocial: string; f_donUrl: string;
+  f_donInfo: string; f_donInfoHint: string; donCopy: string; donData: string;
+  donFollow: string; donNone: string;
 }
 
 export const T: Record<Lang, Strings> = {
@@ -209,13 +226,13 @@ export const T: Record<Lang, Strings> = {
     volunteer: "Voluntariado",
     volunteerTitle: "Súmate al voluntariado",
     volunteerSub:
-      "HelpMap se construye con personal de salud y rescate en el terreno. Si eres médico, enfermero, personal de salud o rescatista y tienes acceso a información veraz, tu ayuda salva tiempo y reúne familias.",
+      "HelpMap es un esfuerzo ciudadano que se construye con personal de salud y rescate en el terreno. Mientras más datos podamos confirmar, más rápido llenamos el mapa y más familias se reúnen.",
     volunteerAsk:
-      "¿Te identificas con alguno de estos perfiles? Escríbenos y te explicamos cómo colaborar de forma segura.",
+      "¿Quieres colaborar? Escríbenos con tu perfil y tus fuentes de información para darte acceso. Cada voluntario se verifica antes de habilitarlo: así protegemos la veracidad de los datos.",
     volunteerWa: "Escríbenos por WhatsApp",
     volunteerEmail: "Escríbenos por correo",
-    volunteerWaMsg: "Hola, quiero colaborar como voluntario/a de HelpMap VE.",
-    volunteerEmailSubj: "Quiero ser voluntario/a — HelpMap VE",
+    volunteerWaMsg: "Hola, quiero colaborar como voluntario/a de HelpMap VE. Mi perfil es: (ej. médico, enfermero, rescatista) ___. Mis fuentes de información son: ___.",
+    volunteerEmailSubj: "Quiero ser voluntario/a — HelpMap VE (perfil y fuentes)",
     volunteerNote:
       "Verificamos a cada colaborador. Los datos siempre se confirman con profesionales antes de publicarse.",
     donateJoin: "¿Ayudas con comida o medicamentos?",
@@ -268,6 +285,20 @@ export const T: Record<Lang, Strings> = {
     listSent: "Lista enviada para procesamiento.",
     listError: "No se pudo enviar la lista. Intenta de nuevo.",
     listNote: "Nota (opcional)",
+    tabDonations: "Donaciones",
+    addDonation: "Agregar iniciativa",
+    editDonation: "Editar iniciativa",
+    savedDon: "Iniciativa guardada",
+    f_donName: "Nombre de la iniciativa",
+    f_donDesc: "Descripción corta (opcional)",
+    f_donSocial: "Link de red social (opcional)",
+    f_donUrl: "Link de donación (opcional)",
+    f_donInfo: "Datos para recibir donativos",
+    f_donInfoHint: "Pago Móvil, cuenta, Zelle, Binance… (opcional)",
+    donCopy: "Copiar datos",
+    donData: "Datos para donar",
+    donFollow: "Red social",
+    donNone: "Aún no hay iniciativas. Agrega la primera.",
   },
   en: {
     appName: "HelpMap VE", tagline: "Humanitarian OSINT",
@@ -338,13 +369,13 @@ export const T: Record<Lang, Strings> = {
     volunteer: "Volunteer",
     volunteerTitle: "Join the volunteers",
     volunteerSub:
-      "HelpMap is built by health and rescue staff on the ground. If you are a doctor, nurse, health worker or rescuer with access to truthful information, your help saves time and reunites families.",
+      "HelpMap is a citizen effort built with health and rescue staff on the ground. The more data we can confirm, the faster we fill the map and the more families reunite.",
     volunteerAsk:
-      "Do you fit any of these profiles? Message us and we'll explain how to collaborate safely.",
+      "Want to help? Message us with your profile and your information sources so we can grant you access. Every volunteer is vetted before being enabled — that's how we protect the accuracy of the data.",
     volunteerWa: "Message us on WhatsApp",
     volunteerEmail: "Email us",
-    volunteerWaMsg: "Hi, I'd like to volunteer with HelpMap VE.",
-    volunteerEmailSubj: "I want to volunteer — HelpMap VE",
+    volunteerWaMsg: "Hi, I'd like to volunteer with HelpMap VE. My profile is: (e.g. doctor, nurse, rescuer) ___. My information sources are: ___.",
+    volunteerEmailSubj: "I want to volunteer — HelpMap VE (profile and sources)",
     volunteerNote:
       "We vet every collaborator. Data is always confirmed with professionals before it's published.",
     donateJoin: "Helping with food or medicine?",
@@ -397,6 +428,20 @@ export const T: Record<Lang, Strings> = {
     listSent: "List sent for processing.",
     listError: "Couldn't send the list. Try again.",
     listNote: "Note (optional)",
+    tabDonations: "Donations",
+    addDonation: "Add initiative",
+    editDonation: "Edit initiative",
+    savedDon: "Initiative saved",
+    f_donName: "Initiative name",
+    f_donDesc: "Short description (optional)",
+    f_donSocial: "Social link (optional)",
+    f_donUrl: "Donation link (optional)",
+    f_donInfo: "How to donate (details)",
+    f_donInfoHint: "Pago Móvil, account, Zelle, Binance… (optional)",
+    donCopy: "Copy details",
+    donData: "How to donate",
+    donFollow: "Social",
+    donNone: "No initiatives yet. Add the first one.",
   },
 };
 

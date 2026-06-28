@@ -11,6 +11,7 @@ import {
   protectMinor,
   slug,
   worst,
+  type Donation,
   type Estatus,
   type Lang,
   type Location,
@@ -41,23 +42,6 @@ import "./helpmap.css";
 type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer" | "contact";
 
 // External donation partners surfaced in the "Donar" panel.
-const DONATIONS: { name: string; url: string; desc: { es: string; en: string } }[] = [
-  {
-    name: "World Central Kitchen",
-    url: "https://donate.wck.org/team/835442",
-    desc: { es: "Comidas calientes para familias afectadas.", en: "Hot meals for affected families." },
-  },
-  {
-    name: "Cáritas Venezuela",
-    url: "https://caritasvenezuela.org/donaciones/",
-    desc: { es: "Ayuda humanitaria, salud y refugios.", en: "Humanitarian aid, health and shelters." },
-  },
-  {
-    name: "Yummy Rides",
-    url: "https://dona.yummyrides.com",
-    desc: { es: "Logística y traslados en el terreno.", en: "On-the-ground logistics and transport." },
-  },
-];
 // Volunteer recruiting contact. ⚠️ Fill with the crew's real channel before
 // launch. Leave `whatsapp` empty to hide the WhatsApp button (digits only, no +).
 const VOLUNTEER = {
@@ -74,10 +58,10 @@ const VOLUNTEER_ROLES: { es: string; en: string }[] = [
   { es: "Con acceso a información veraz y de primera mano", en: "With access to truthful, first-hand information" },
 ];
 
-type AdminTab = "centros" | "personas" | "voluntarios" | "listas";
-type EditType = null | "center" | "person";
+type AdminTab = "centros" | "personas" | "voluntarios" | "listas" | "donaciones";
+type EditType = null | "center" | "person" | "donation";
 
-const CACHE_KEY = "helpmap:data:v2";
+const CACHE_KEY = "helpmap:data:v3";
 // Bump the version when tour content changes so returning users see it once more.
 const TOUR_KEY = "helpmap:tour:v2";
 
@@ -97,6 +81,12 @@ interface Draft {
   sexo?: Sexo;
   location_id?: string;
   estatus?: Estatus;
+  // donation
+  don_name?: string;
+  don_desc?: string;
+  don_social?: string;
+  don_url?: string;
+  don_info?: string;
 }
 
 interface AuthUser {
@@ -151,6 +141,11 @@ const ICON = {
       <path d="m9 6 6 6-6 6" />
     </svg>
   ),
+  chevD: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  ),
   plus: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <path d="M12 5v14M5 12h14" />
@@ -197,6 +192,19 @@ const ICON = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m3 7 9 6 9-6" />
+    </svg>
+  ),
+  ig: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="M17.5 6.5h.01" />
+    </svg>
+  ),
+  copy: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a2 2 0 0 1 2-2h8" />
     </svg>
   ),
   // Hand offering a heart — volunteer / help.
@@ -272,6 +280,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [patients, setPatients] = useState<PatientPublic[]>([]);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [openDon, setOpenDon] = useState<string | null>(null); // foldable donation cards (accordion)
   const [stale, setStale] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [showHeat, setShowHeat] = useState(false); // damage heat overlay off by default (user toggles "Daños")
@@ -440,7 +450,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       try {
         const raw = localStorage.getItem(CACHE_KEY);
         if (raw) {
-          const c = JSON.parse(raw) as { locations?: Location[]; patients?: PatientPublic[] };
+          const c = JSON.parse(raw) as {
+            locations?: Location[];
+            patients?: PatientPublic[];
+            donations?: Donation[];
+          };
           if (Array.isArray(c.locations)) {
             setLocations(c.locations);
             hadCache = c.locations.length > 0;
@@ -448,13 +462,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           // Re-enforce minor protection on cached data — a stale/poisoned cache
           // must never reintroduce a minor photo/CI (CLAUDE.md §2).
           if (Array.isArray(c.patients)) setPatients(c.patients.map(protectMinor));
+          if (Array.isArray(c.donations)) setDonations(c.donations);
         }
       } catch {
         /* ignore */
       }
       try {
         const supabase = getSupabase();
-        const [locRes, patRes] = await Promise.all([
+        const [locRes, patRes, donRes] = await Promise.all([
           supabase.from("locations").select("*").eq("active", true),
           // Reads the privacy-filtered VIEW, never the base table (CLAUDE.md §2).
           supabase
@@ -462,19 +477,25 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             .select("*")
             .order("updated_at", { ascending: false })
             .limit(2000),
+          supabase.from("donations").select("*").eq("active", true).order("sort", { ascending: true }),
         ]);
         if (cancelled) return;
         if (locRes.error) throw locRes.error;
         if (patRes.error) throw patRes.error;
+        // Donations are non-critical: if the table/policies aren't there yet, don't
+        // blow up the whole load — keep whatever we have (cache/seed).
+        const dons = donRes.error ? null : ((donRes.data ?? []) as Donation[]);
         const locs = (locRes.data ?? []) as Location[];
         // Defense in depth: enforce minor protection on every record from the
         // view before it touches state or the cache (CLAUDE.md §2).
         const pats = ((patRes.data ?? []) as PatientPublic[]).map(protectMinor);
         setLocations(locs);
         setPatients(pats);
+        if (dons) setDonations(dons);
         setStale(false);
         try {
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ locations: locs, patients: pats }));
+          const cached = JSON.stringify({ locations: locs, patients: pats, donations: dons ?? donations });
+          localStorage.setItem(CACHE_KEY, cached);
         } catch {
           /* storage full — non-fatal */
         }
@@ -1024,6 +1045,70 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setPatients((ps) => ps.filter((p) => p.location_id !== id));
     setLocationSel((cur) => (cur === id ? null : cur));
     notifyCenter("deleted", center ?? { location_id: id });
+    clearEdit();
+    showToast(t.deleted);
+  };
+
+  // ---- Donations (community orgs in the "Donar" panel) -------------------
+  const newDonation = () => {
+    setEditType("donation");
+    setEditId(null);
+    setDraft({ don_name: "", don_desc: "", don_social: "", don_url: "", don_info: "" });
+  };
+  const editDonation = (d: Donation) => {
+    setEditType("donation");
+    setEditId(d.id);
+    setDraft({
+      don_name: d.name,
+      don_desc: d.description ?? "",
+      don_social: d.social_url ?? "",
+      don_url: d.donate_url ?? "",
+      don_info: d.donate_info ?? "",
+    });
+  };
+  const saveDonation = async () => {
+    const d = draft || {};
+    const name = (d.don_name || "").trim();
+    if (!name) {
+      showToast(t.contactError);
+      return;
+    }
+    const clean = (s?: string) => {
+      const v = (s || "").trim();
+      return v ? v : null;
+    };
+    const row = {
+      name,
+      description: clean(d.don_desc),
+      social_url: clean(d.don_social),
+      donate_url: clean(d.don_url),
+      donate_info: clean(d.don_info),
+      active: true,
+      updated_at: new Date().toISOString(),
+    };
+    const supabase = getSupabase();
+    const res = editId
+      ? await supabase.from("donations").update(row).eq("id", editId).select("*").single()
+      : await supabase.from("donations").insert(row).select("*").single();
+    if (res.error || !res.data) {
+      showToast(t.saveError);
+      return;
+    }
+    const saved = res.data as Donation;
+    setDonations((ds) => {
+      const next = editId ? ds.map((x) => (x.id === saved.id ? saved : x)) : [...ds, saved];
+      return next.sort((a, b) => a.sort - b.sort);
+    });
+    clearEdit();
+    showToast(t.savedDon);
+  };
+  const deleteDonation = async (id: string) => {
+    const { error } = await getSupabase().from("donations").delete().eq("id", id);
+    if (error) {
+      showToast(t.saveError);
+      return;
+    }
+    setDonations((ds) => ds.filter((x) => x.id !== id));
     clearEdit();
     showToast(t.deleted);
   };
@@ -1762,15 +1847,69 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           <div className="ovbody">
             <p className="donate-sub">{t.donateSub}</p>
             <div className="donate-list">
-              {DONATIONS.map((d) => (
-                <a key={d.url} className="donate-card" href={d.url} target="_blank" rel="noopener noreferrer">
-                  <div className="donate-info">
-                    <span className="donate-name">{d.name}</span>
-                    <span className="donate-desc">{d.desc[lang]}</span>
+              {donations.map((d) => {
+                const open = openDon === d.id;
+                const hasBody = !!(d.donate_info || d.social_url || d.donate_url);
+                return (
+                  <div key={d.id} className={"donate-card" + (open ? " open" : "")}>
+                    <button
+                      type="button"
+                      className="donate-toggle"
+                      onClick={() => hasBody && setOpenDon(open ? null : d.id)}
+                      aria-expanded={open}
+                      disabled={!hasBody}
+                    >
+                      <div className="donate-info">
+                        <span className="donate-name">{d.name}</span>
+                        {d.description && <span className="donate-desc">{d.description}</span>}
+                      </div>
+                      {hasBody && <span className="donate-chev">{ICON.chevD}</span>}
+                    </button>
+                    {open && hasBody && (
+                      <div className="donate-body">
+                        {d.donate_info && (
+                          <div className="donate-data">
+                            <span className="donate-data-label">{t.donData}</span>
+                            <span className="donate-data-txt">{d.donate_info}</span>
+                            <button
+                              type="button"
+                              className="donate-copy"
+                              onClick={async () => {
+                                if (await copyText(d.donate_info!)) showToast(t.copied);
+                              }}
+                            >
+                              {ICON.copy}
+                              {t.donCopy}
+                            </button>
+                          </div>
+                        )}
+                        {(d.social_url || d.donate_url) && (
+                          <div className="donate-acts">
+                            {d.social_url && (
+                              <a
+                                className="donate-ig"
+                                href={d.social_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={t.donFollow}
+                              >
+                                {ICON.ig}
+                                {t.donFollow}
+                              </a>
+                            )}
+                            {d.donate_url && (
+                              <a className="donate-go" href={d.donate_url} target="_blank" rel="noopener noreferrer">
+                                {t.donateCta}
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <span className="donate-go">{t.donateCta}</span>
-                </a>
-              ))}
+                );
+              })}
+              {donations.length === 0 && <p className="donate-desc">{t.donNone}</p>}
             </div>
             <div className="donate-join">
               <span className="donate-join-t">{t.donateJoin}</span>
@@ -2147,6 +2286,15 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   >
                     {t.tabLists}
                   </button>
+                  <button
+                    className={"atab " + (adminTab === "donaciones" ? "atab-on" : "")}
+                    onClick={() => {
+                      setAdminTab("donaciones");
+                      clearEdit();
+                    }}
+                  >
+                    {t.tabDonations}
+                  </button>
                   {isAdmin && (
                     <button
                       className={"atab " + (adminTab === "voluntarios" ? "atab-on" : "")}
@@ -2193,6 +2341,34 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                           </button>
                           {isAdmin && (
                             <button className="amini del" onClick={() => deleteCenter(l.location_id)}>
+                              {ICON.trash}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {adminTab === "donaciones" && !editType && (
+                  <div>
+                    <button className="addbtn" onClick={newDonation}>
+                      {ICON.plus}
+                      {t.addDonation}
+                    </button>
+                    {donations.length === 0 && <div className="asub" style={{ padding: "8px 2px" }}>{t.donNone}</div>}
+                    {donations.map((d) => (
+                      <div className="arow" key={d.id}>
+                        <div className="ai">
+                          <div className="aname">{d.name}</div>
+                          {d.description && <div className="asub">{d.description}</div>}
+                        </div>
+                        <div className="aacts">
+                          <button className="amini" onClick={() => editDonation(d)}>
+                            {ICON.edit}
+                          </button>
+                          {isAdmin && (
+                            <button className="amini del" onClick={() => deleteDonation(d.id)}>
                               {ICON.trash}
                             </button>
                           )}
@@ -2402,6 +2578,75 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     </div>
                     {canDelete && (
                       <button className="edel" onClick={() => editId && deleteCenter(editId)}>
+                        {t.del}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {editType === "donation" && (
+                  <div className="form">
+                    <div className="fld">
+                      <span className="flabel">{t.f_donName}</span>
+                      <input
+                        className="finput"
+                        value={draft?.don_name || ""}
+                        onChange={setD("don_name")}
+                        placeholder={t.f_donName}
+                      />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_donDesc}</span>
+                      <input
+                        className="finput"
+                        value={draft?.don_desc || ""}
+                        onChange={setD("don_desc")}
+                        placeholder={t.f_donDesc}
+                      />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_donSocial}</span>
+                      <input
+                        className="finput"
+                        type="url"
+                        inputMode="url"
+                        value={draft?.don_social || ""}
+                        onChange={setD("don_social")}
+                        placeholder="https://instagram.com/…"
+                      />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_donUrl}</span>
+                      <input
+                        className="finput"
+                        type="url"
+                        inputMode="url"
+                        value={draft?.don_url || ""}
+                        onChange={setD("don_url")}
+                        placeholder="https://…"
+                      />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_donInfo}</span>
+                      <textarea
+                        className="finput"
+                        rows={4}
+                        value={draft?.don_info || ""}
+                        onChange={(e) => setDraft((d) => ({ ...(d || {}), don_info: e.target.value }))}
+                        placeholder={t.f_donInfoHint}
+                      />
+                      <span className="fhint">{t.f_donInfoHint}</span>
+                    </div>
+                    <div className="ebtns">
+                      <button className="btng" onClick={clearEdit}>
+                        {t.cancel}
+                      </button>
+                      <button className="btnp" onClick={saveDonation}>
+                        {t.save}
+                      </button>
+                    </div>
+                    {canDelete && (
+                      <button className="edel" onClick={() => editId && deleteDonation(editId)}>
                         {t.del}
                       </button>
                     )}

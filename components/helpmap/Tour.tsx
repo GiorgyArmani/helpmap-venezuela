@@ -178,8 +178,8 @@ const SLIDES: Slide[] = [
     eyebrow: { es: "Súmate", en: "Join us" },
     title: { es: "¿Eres personal de salud o rescate?", en: "Are you health or rescue staff?" },
     body: {
-      es: "Si eres médico, enfermero, personal de salud o rescatista y tienes acceso a información veraz, contáctanos: te explicamos cómo colaborar. Toca el ícono de voluntariado arriba.",
-      en: "If you are a doctor, nurse, health worker or rescuer with access to truthful information, contact us — we'll explain how to collaborate. Tap the volunteer icon at the top.",
+      es: "Esto es un esfuerzo ciudadano: mientras más datos confirmemos, más rápido llenamos el mapa. Si eres médico, enfermero, personal de salud o rescatista, escríbenos con tu perfil y tus fuentes para darte acceso. Toca el ícono de voluntariado arriba.",
+      en: "This is a citizen effort: the more data we confirm, the faster we fill the map. If you are a doctor, nurse, health worker or rescuer, write to us with your profile and sources so we can grant you access. Tap the volunteer icon at the top.",
     },
     icon: I.hands,
   },
