@@ -47,6 +47,19 @@ const I = {
       <path d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z" />
     </svg>
   ),
+  shield: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  ),
+  hands: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 14.5 8.8 12.4a1.7 1.7 0 0 1 2.4-2.4l1 1 1-1a1.7 1.7 0 0 1 2.4 2.4L13 14.5a1.4 1.4 0 0 1-2 0Z" />
+      <path d="M3 13a2 2 0 0 1 2-2h1.5l3 2.6a2 2 0 0 0 1.3.5H15a1.5 1.5 0 0 1 0 3h-3" />
+      <path d="M3 13v6h2.5l5.5 1.5 8-2.5a1.7 1.7 0 0 0-1.2-3.1" />
+    </svg>
+  ),
 };
 
 const SLIDES: Slide[] = [
@@ -54,8 +67,8 @@ const SLIDES: Slide[] = [
     eyebrow: { es: "Bienvenido", en: "Welcome" },
     title: { es: "Encuentra a tus seres queridos", en: "Find your loved ones" },
     body: {
-      es: "Base de datos verificada de personas afectadas por el terremoto que afecto nuestro país el 24 de Junio 2026, en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
-      en: "A verified database of people affected by the earthquake in Caracas, La Guaira and Miranda, continuously updated by medical staff in the field. It helps you locate your family.",
+      es: "Base de datos verificada de personas afectadas por los terremotos del 24 de Junio 2026, en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
+      en: "A verified database of people affected by the earthquakes in Caracas, La Guaira and Miranda, continuously updated by medical staff in the field. It helps you locate your family.",
     },
     icon: I.heart,
   },
@@ -121,6 +134,54 @@ const SLIDES: Slide[] = [
         },
       },
     ],
+  },
+  {
+    eyebrow: { es: "Nuestro compromiso", en: "Our commitment" },
+    title: { es: "Sin fines de lucro y con cuidado", en: "Non-profit and handled with care" },
+    body: {
+      es: "Somos una iniciativa voluntaria. Esta información existe solo para reunir familias. Así protegemos los datos:",
+      en: "We are a volunteer initiative. This information exists only to reunite families. This is how we protect the data:",
+    },
+    icon: I.shield,
+    steps: [
+      {
+        t: { es: "No lucramos", en: "No profit" },
+        d: {
+          es: "No cobramos, no mostramos publicidad y no obtenemos beneficio de estos datos.",
+          en: "We don't charge, show ads, or profit from this data.",
+        },
+      },
+      {
+        t: { es: "No vendemos tus datos", en: "We don't sell your data" },
+        d: {
+          es: "La información nunca se vende ni se comparte con terceros con fines comerciales.",
+          en: "The information is never sold or shared with third parties for commercial purposes.",
+        },
+      },
+      {
+        t: { es: "Verificado por profesionales", en: "Verified by professionals" },
+        d: {
+          es: "Cada registro es confirmado por personal médico y contactos de confianza antes de publicarse.",
+          en: "Each record is confirmed by medical staff and trusted contacts before being published.",
+        },
+      },
+      {
+        t: { es: "Protección de niños, niñas y adolescentes", en: "Protection of children and adolescents" },
+        d: {
+          es: "Nunca mostramos la cédula ni la foto de un menor, y limitamos sus datos al mínimo.",
+          en: "We never show a minor's ID or photo, and we keep their data to a minimum.",
+        },
+      },
+    ],
+  },
+  {
+    eyebrow: { es: "Súmate", en: "Join us" },
+    title: { es: "¿Eres personal de salud o rescate?", en: "Are you health or rescue staff?" },
+    body: {
+      es: "Si eres médico, enfermero, personal de salud o rescatista y tienes acceso a información veraz, contáctanos: te explicamos cómo colaborar. Toca el ícono de voluntariado arriba.",
+      en: "If you are a doctor, nurse, health worker or rescuer with access to truthful information, contact us — we'll explain how to collaborate. Tap the volunteer icon at the top.",
+    },
+    icon: I.hands,
   },
 ];
 

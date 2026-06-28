@@ -105,6 +105,20 @@ export interface Strings {
   donate: string; donateTitle: string; donateSub: string; donateCta: string; donateNote: string;
   saveError: string; delBlocked: string;
   directions: string;
+  damageLayer: string; damageLess: string; damageMore: string;
+  feltIntensity: string; intLeve: string; intSevera: string; aftershocks: string; damagePreliminary: string;
+  volunteer: string; volunteerTitle: string; volunteerSub: string; volunteerAsk: string;
+  volunteerWa: string; volunteerEmail: string; volunteerWaMsg: string; volunteerEmailSubj: string;
+  volunteerNote: string;
+  donateJoin: string; donateJoinSub: string; donateJoinCta: string;
+  infoNeededTitle: string; infoNeeded: string;
+  shareDisclosure: string;
+  tabVolunteers: string; tabLists: string;
+  addVolunteer: string; volPass: string; volGenerate: string; volCreate: string;
+  volCreated: string; volCreatedNoMail: string; volCreateErr: string;
+  volRevoke: string; volRevoked: string; volNone: string; volReviewNote: string;
+  listTitle: string; listHint: string; listPick: string; listSending: string;
+  listSent: string; listError: string; listNote: string;
 }
 
 export const T: Record<Lang, Strings> = {
@@ -162,6 +176,56 @@ export const T: Record<Lang, Strings> = {
     saveError: "No se pudo guardar en la base de datos. Intenta de nuevo.",
     delBlocked: "No se pudo eliminar. Puede que haya personas registradas en este centro.",
     directions: "Cómo llegar",
+    damageLayer: "Daños",
+    damageLess: "Menos",
+    damageMore: "Más",
+    feltIntensity: "Intensidad sentida",
+    intLeve: "Leve",
+    intSevera: "Severa",
+    aftershocks: "réplicas",
+    damagePreliminary: "Datos preliminares",
+    volunteer: "Voluntariado",
+    volunteerTitle: "Súmate al voluntariado",
+    volunteerSub:
+      "HelpMap se construye con personal de salud y rescate en el terreno. Si eres médico, enfermero, personal de salud o rescatista y tienes acceso a información veraz, tu ayuda salva tiempo y reúne familias.",
+    volunteerAsk:
+      "¿Te identificas con alguno de estos perfiles? Escríbenos y te explicamos cómo colaborar de forma segura.",
+    volunteerWa: "Escríbenos por WhatsApp",
+    volunteerEmail: "Escríbenos por correo",
+    volunteerWaMsg: "Hola, quiero colaborar como voluntario/a de HelpMap VE.",
+    volunteerEmailSubj: "Quiero ser voluntario/a — HelpMap VE",
+    volunteerNote:
+      "Verificamos a cada colaborador. Los datos siempre se confirman con profesionales antes de publicarse.",
+    donateJoin: "¿Ayudas con comida o medicamentos?",
+    donateJoinSub:
+      "Si entregas comidas o donaciones de medicamentos verificables, podemos sumarte a esta lista para que más gente te encuentre. Escríbenos.",
+    donateJoinCta: "Quiero aparecer aquí",
+    infoNeededTitle: "Necesitamos tu ayuda con información",
+    infoNeeded:
+      "Buscamos especialmente datos verificables de Morón, San Felipe y el estado Yaracuy, y de más hospitales en las zonas afectadas. Cualquier aporte suma.",
+    shareDisclosure:
+      "HelpMap trabaja para que solo datos confirmados en campo por contactos en centros de salud lleguen a la app.",
+    tabVolunteers: "Voluntarios",
+    tabLists: "Subir listas",
+    addVolunteer: "Nuevo voluntario",
+    volPass: "Contraseña temporal",
+    volGenerate: "Generar",
+    volCreate: "Crear voluntario",
+    volCreated: "Voluntario creado y notificado por correo.",
+    volCreatedNoMail: "Voluntario creado (correo no configurado).",
+    volCreateErr: "No se pudo crear el voluntario.",
+    volRevoke: "Revocar",
+    volRevoked: "Acceso revocado.",
+    volNone: "Aún no hay voluntarios.",
+    volReviewNote: "Tus cambios pasan por revisión del equipo antes de publicarse.",
+    listTitle: "Subir foto de lista",
+    listHint:
+      "Fotografía una lista de pacientes (manuscrita o impresa). Se envía al equipo para procesar (OCR) y revisar antes de publicarse.",
+    listPick: "Tomar / elegir foto",
+    listSending: "Enviando…",
+    listSent: "Lista enviada para procesamiento.",
+    listError: "No se pudo enviar la lista. Intenta de nuevo.",
+    listNote: "Nota (opcional)",
   },
   en: {
     appName: "HelpMap VE", tagline: "Humanitarian OSINT",
@@ -217,8 +281,70 @@ export const T: Record<Lang, Strings> = {
     saveError: "Couldn't save to the database. Try again.",
     delBlocked: "Couldn't delete. There may be people registered at this center.",
     directions: "Get directions",
+    damageLayer: "Damage",
+    damageLess: "Less",
+    damageMore: "More",
+    feltIntensity: "Felt intensity",
+    intLeve: "Light",
+    intSevera: "Severe",
+    aftershocks: "aftershocks",
+    damagePreliminary: "Preliminary data",
+    volunteer: "Volunteer",
+    volunteerTitle: "Join the volunteers",
+    volunteerSub:
+      "HelpMap is built by health and rescue staff on the ground. If you are a doctor, nurse, health worker or rescuer with access to truthful information, your help saves time and reunites families.",
+    volunteerAsk:
+      "Do you fit any of these profiles? Message us and we'll explain how to collaborate safely.",
+    volunteerWa: "Message us on WhatsApp",
+    volunteerEmail: "Email us",
+    volunteerWaMsg: "Hi, I'd like to volunteer with HelpMap VE.",
+    volunteerEmailSubj: "I want to volunteer — HelpMap VE",
+    volunteerNote:
+      "We vet every collaborator. Data is always confirmed with professionals before it's published.",
+    donateJoin: "Helping with food or medicine?",
+    donateJoinSub:
+      "If you provide meals or verifiable medication donations, we can add you to this list so more people can find you. Get in touch.",
+    donateJoinCta: "Add my organization",
+    infoNeededTitle: "We need your help with information",
+    infoNeeded:
+      "We're especially looking for verifiable data from Morón, San Felipe and Yaracuy state, and from more hospitals in the affected areas. Every contribution helps.",
+    shareDisclosure:
+      "HelpMap works so that only data confirmed in the field by health-center contacts reaches the app.",
+    tabVolunteers: "Volunteers",
+    tabLists: "Upload lists",
+    addVolunteer: "New volunteer",
+    volPass: "Temp password",
+    volGenerate: "Generate",
+    volCreate: "Create volunteer",
+    volCreated: "Volunteer created and emailed.",
+    volCreatedNoMail: "Volunteer created (email not configured).",
+    volCreateErr: "Couldn't create the volunteer.",
+    volRevoke: "Revoke",
+    volRevoked: "Access revoked.",
+    volNone: "No volunteers yet.",
+    volReviewNote: "Your changes are reviewed by the team before publishing.",
+    listTitle: "Upload list photo",
+    listHint:
+      "Photograph a patient list (handwritten or printed). It's sent to the team to process (OCR) and review before publishing.",
+    listPick: "Take / choose photo",
+    listSending: "Sending…",
+    listSent: "List sent for processing.",
+    listError: "Couldn't send the list. Try again.",
+    listNote: "Note (optional)",
   },
 };
+
+// Extra protection layer for minors (defense in depth). The DB `patients_public`
+// view already nulls minor photos/CI, but the client must NEVER trust a single
+// source: apply this to every patient record entering the app (view fetch, cached
+// reads, admin inserts). If a record is a minor — by flag OR by age < 18 — we hard
+// strip the photo and force CI to "MENOR", regardless of what arrived. See CLAUDE.md §2.
+export function protectMinor(p: PatientPublic): PatientPublic {
+  const minor = p.is_minor || (p.edad != null && p.edad < 18);
+  if (!minor) return p;
+  if (p.foto_url === null && p.ci_display === "MENOR" && p.is_minor) return p; // already clean
+  return { ...p, is_minor: true, ci_display: "MENOR", foto_url: null };
+}
 
 const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
 

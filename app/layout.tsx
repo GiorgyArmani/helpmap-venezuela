@@ -17,6 +17,7 @@ const DESCRIPTION =
   "Base de datos verificada de personas afectadas por el terremoto en Caracas, La Guaira y Miranda, en constante actualización por personal médico en campo.";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.helpmapvzla.net"),
   applicationName: "HelpMap Venezuela",
   title: "HelpMap Venezuela",
   description: DESCRIPTION,

@@ -64,7 +64,7 @@ export default async function PatientPage({ params }: Params) {
         <div style={S.kicker}>REGISTRO HUMANITARIO · HELPMAP</div>
         <div style={S.hero}>
           <div style={S.avatar}>
-            {p.foto_url ? (
+            {p.foto_url && !p.is_minor ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={p.foto_url} alt="" style={S.avatarImg} />
             ) : (

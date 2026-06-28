@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
-import type { PatientPublic } from "@/components/helpmap/data";
+import { protectMinor, type PatientPublic } from "@/components/helpmap/data";
 
 // Reads a single record from the privacy-filtered `patients_public` view by id.
 // Never touches the base `patients` table (CLAUDE.md §2).
@@ -14,7 +14,9 @@ export async function fetchPatient(id: string): Promise<PatientPublic | null> {
       .eq("id", id)
       .single();
     if (error || !data) return null;
-    return data as PatientPublic;
+    // Defense in depth: re-enforce minor protection server-side too, so the SSR
+    // page, OG image and story never render a minor photo/CI (CLAUDE.md §2).
+    return protectMinor(data as PatientPublic);
   } catch {
     return null;
   }

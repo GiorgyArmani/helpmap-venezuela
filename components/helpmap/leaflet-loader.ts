@@ -4,6 +4,8 @@
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+// leaflet.heat: tiny canvas heatmap plugin, augments window.L with L.heatLayer.
+const LEAFLET_HEAT_JS = "https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js";
 
 declare global {
   interface Window {
@@ -46,4 +48,36 @@ export function loadLeaflet(): Promise<unknown> {
   });
 
   return loadPromise;
+}
+
+let heatPromise: Promise<unknown> | null = null;
+
+// Loads Leaflet first, then the leaflet.heat plugin. Resolves with window.L once
+// L.heatLayer is available. Used for the earthquake damage heat overlay.
+export function loadLeafletHeat(): Promise<unknown> {
+  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
+  return loadLeaflet().then(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window.L as any)?.heatLayer) return window.L;
+    if (heatPromise) return heatPromise;
+
+    heatPromise = new Promise((resolve, reject) => {
+      const done = () => resolve(window.L);
+      const existing = document.querySelector<HTMLScriptElement>(`script[src="${LEAFLET_HEAT_JS}"]`);
+      if (existing) {
+        existing.addEventListener("load", done);
+        existing.addEventListener("error", reject);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((window.L as any)?.heatLayer) done();
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = LEAFLET_HEAT_JS;
+      s.async = true;
+      s.onload = done;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    return heatPromise;
+  });
 }

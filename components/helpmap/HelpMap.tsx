@@ -8,6 +8,7 @@ import {
   T,
   TYPE_META,
   norm,
+  protectMinor,
   slug,
   worst,
   type Estatus,
@@ -32,11 +33,12 @@ import {
   telegramUrl,
   whatsappUrl,
 } from "./share";
-import { loadLeaflet } from "./leaflet-loader";
+import { loadLeaflet, loadLeafletHeat } from "./leaflet-loader";
+import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-type View = null | "detail" | "share" | "report" | "admin" | "donate";
+type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer";
 
 // External donation partners surfaced in the "Donar" panel.
 const DONATIONS: { name: string; url: string; desc: { es: string; en: string } }[] = [
@@ -56,11 +58,28 @@ const DONATIONS: { name: string; url: string; desc: { es: string; en: string } }
     desc: { es: "Logística y traslados en el terreno.", en: "On-the-ground logistics and transport." },
   },
 ];
-type AdminTab = "centros" | "personas";
+// Volunteer recruiting contact. ⚠️ Fill with the crew's real channel before
+// launch. Leave `whatsapp` empty to hide the WhatsApp button (digits only, no +).
+const VOLUNTEER = {
+  whatsapp: "", // e.g. "584120000000"
+  email: "info@helpmapvzla.net",
+};
+
+// Profiles we're recruiting — shown as a checklist in the volunteer panel.
+const VOLUNTEER_ROLES: { es: string; en: string }[] = [
+  { es: "Médicos y médicas", en: "Doctors" },
+  { es: "Enfermeros y enfermeras", en: "Nurses" },
+  { es: "Personal de salud", en: "Health workers" },
+  { es: "Rescatistas y Protección Civil", en: "Rescuers & Civil Protection" },
+  { es: "Con acceso a información veraz y de primera mano", en: "With access to truthful, first-hand information" },
+];
+
+type AdminTab = "centros" | "personas" | "voluntarios" | "listas";
 type EditType = null | "center" | "person";
 
 const CACHE_KEY = "helpmap:data:v2";
-const TOUR_KEY = "helpmap:tour:v1";
+// Bump the version when tour content changes so returning users see it once more.
+const TOUR_KEY = "helpmap:tour:v2";
 
 interface Draft {
   // center
@@ -94,7 +113,9 @@ const initials = (p: PatientPublic) =>
   ((p.nombres[0] || "") + (p.apellidos[0] || "")).toUpperCase() || "··";
 
 function Avatar({ p, cls }: { p: PatientPublic; cls: string }) {
-  if (p.foto_url) {
+  // Never render a photo for a minor, even if a foto_url somehow arrives (the
+  // data is already stripped by protectMinor; this is the last line of defense).
+  if (p.foto_url && !p.is_minor) {
     return (
       <div className={cls}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -166,6 +187,26 @@ const ICON = {
       <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" />
     </svg>
   ),
+  flame: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2s4 3.5 4 8a4 4 0 0 1-8 0c0-1 .3-2 .8-2.7C8 9 8.5 11 10 11c0-3 2-5 2-9Z" />
+      <path d="M12 22a6 6 0 0 0 6-6c0-2-1-4-2.5-5.3" />
+    </svg>
+  ),
+  mail: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </svg>
+  ),
+  // Hand offering a heart — volunteer / help.
+  volunteer: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 14.5 8.8 12.4a1.7 1.7 0 0 1 2.4-2.4l1 1 1-1a1.7 1.7 0 0 1 2.4 2.4L13 14.5a1.4 1.4 0 0 1-2 0Z" />
+      <path d="M3 13a2 2 0 0 1 2-2h1.5l3 2.6a2 2 0 0 0 1.3.5H15a1.5 1.5 0 0 1 0 3h-3" />
+      <path d="M3 13v6h2.5l5.5 1.5 8-2.5a1.7 1.7 0 0 0-1.2-3.1" />
+    </svg>
+  ),
 };
 
 export default function HelpMap({ accent, mapLabels = true, showReport = true }: HelpMapProps) {
@@ -188,14 +229,26 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [patients, setPatients] = useState<PatientPublic[]>([]);
   const [stale, setStale] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [showHeat, setShowHeat] = useState(true); // damage heat overlay on by default (urgency)
+  const [damage, setDamage] = useState<DamageData>(SEED_DAMAGE); // USGS-fed, seed fallback
 
   // Auth
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isAdmin, setIsAdmin] = useState(false); // true only if the user has an admin role row
+  const [isVolunteer, setIsVolunteer] = useState(false); // admin OR volunteer (staff)
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPass, setLoginPass] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
+
+  // Volunteer management (admin) + list upload (staff)
+  const [volunteers, setVolunteers] = useState<{ user_id: string; email: string }[]>([]);
+  const [volEmail, setVolEmail] = useState("");
+  const [volPass, setVolPass] = useState("");
+  const [volBusy, setVolBusy] = useState(false);
+  const [listBusy, setListBusy] = useState(false);
+  const [listNote, setListNote] = useState("");
+  const [listLoc, setListLoc] = useState("");
 
   // Public intake form + offline queue
   const [rNom, setRNom] = useState("");
@@ -222,6 +275,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const markersRef = useRef<Record<string, any>>({});
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tileLayerRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const heatRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const quakeLayerRef = useRef<any>(null); // aftershock markers (USGS)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const getSupabase = () => {
@@ -267,10 +324,13 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     const resolveRole = async (uid: string | undefined) => {
       if (!uid) {
         setIsAdmin(false);
+        setIsVolunteer(false);
         return;
       }
       const { data } = await supabase.from("admin_users").select("role").eq("user_id", uid).maybeSingle();
-      setIsAdmin(data?.role === "admin");
+      const role = data?.role;
+      setIsAdmin(role === "admin");
+      setIsVolunteer(role === "admin" || role === "volunteer");
     };
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ? { email: data.session.user.email ?? null } : null);
@@ -326,7 +386,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             setLocations(c.locations);
             hadCache = c.locations.length > 0;
           }
-          if (Array.isArray(c.patients)) setPatients(c.patients);
+          // Re-enforce minor protection on cached data — a stale/poisoned cache
+          // must never reintroduce a minor photo/CI (CLAUDE.md §2).
+          if (Array.isArray(c.patients)) setPatients(c.patients.map(protectMinor));
         }
       } catch {
         /* ignore */
@@ -346,7 +408,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         if (locRes.error) throw locRes.error;
         if (patRes.error) throw patRes.error;
         const locs = (locRes.data ?? []) as Location[];
-        const pats = (patRes.data ?? []) as PatientPublic[];
+        // Defense in depth: enforce minor protection on every record from the
+        // view before it touches state or the cache (CLAUDE.md §2).
+        const pats = ((patRes.data ?? []) as PatientPublic[]).map(protectMinor);
         setLocations(locs);
         setPatients(pats);
         setStale(false);
@@ -382,7 +446,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           fadeAnimation: false,
           markerZoomAnimation: false,
         });
-        map.setView([10.5, -66.9], 10, { animate: false });
+        // Zoom 9 frames the whole affected corridor (Yaracuy → Barlovento) so
+        // the damage layer reads as a regional event, not just Caracas.
+        map.setView([10.45, -67.2], 9, { animate: false });
         mapRef.current = map;
 
         const style = mapLabels !== false ? "light_all" : "light_nolabels";
@@ -485,6 +551,71 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     });
   }, [mapReady, locations, patients, tsMatch, locationSel, focusId]);
 
+  // ---- Damage data: live from USGS FDSN, seed fallback (see usgsQuake.ts) ----
+  useEffect(() => {
+    const ac = new AbortController();
+    fetchDamageData(ac.signal).then(setDamage).catch(() => {});
+    return () => ac.abort();
+  }, []);
+
+  // ---- Damage heat + aftershocks overlay (CLAUDE.md urgency emphasis) ----
+  // Lives in Leaflet's overlayPane (below markerPane), so center pins stay
+  // tappable on top of the heat.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const clear = () => {
+      if (heatRef.current) {
+        map.removeLayer(heatRef.current);
+        heatRef.current = null;
+      }
+      if (quakeLayerRef.current) {
+        map.removeLayer(quakeLayerRef.current);
+        quakeLayerRef.current = null;
+      }
+    };
+    if (!showHeat) {
+      clear();
+      return;
+    }
+    let cancelled = false;
+    loadLeafletHeat()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then((L: any) => {
+        if (cancelled || !mapRef.current || !L?.heatLayer) return;
+        clear();
+        heatRef.current = L.heatLayer(damage.points, {
+          radius: 42,
+          blur: 34,
+          minOpacity: 0.22,
+          max: 1.0,
+          maxZoom: 12, // keep the area readable as you zoom in
+          gradient: { 0.2: "#fde68a", 0.4: "#fbbf24", 0.6: "#f97316", 0.8: "#ef4444", 1.0: "#b91c1c" },
+        }).addTo(map);
+        // Aftershock epicentres as small red markers (USGS only).
+        if (damage.aftershocks.length) {
+          const grp = L.layerGroup();
+          damage.aftershocks.forEach((a) => {
+            L.circleMarker([a.lat, a.lng], {
+              radius: Math.max(4, Math.min(13, a.mag * 1.7)),
+              color: "#b91c1c",
+              weight: 1.4,
+              fillColor: "#ef4444",
+              fillOpacity: 0.45,
+            })
+              .bindTooltip(`M${a.mag.toFixed(1)} · ${a.place}`, { direction: "top" })
+              .addTo(grp);
+          });
+          grp.addTo(map);
+          quakeLayerRef.current = grp;
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [mapReady, showHeat, damage]);
+
   // ---- Derived list ------------------------------------------------------
   const list = useMemo(
     () => patients.filter((p) => tsMatch(p) && (!locationSel || p.location_id === locationSel)),
@@ -510,14 +641,20 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const shareCurrent = async () => {
     if (!selP) return;
     const url = patientUrl(selP.id);
-    const text = shareText(selP.nombres + " " + selP.apellidos, SM[selP.estatus][lang], selP.location_name);
+    const text =
+      shareText(selP.nombres + " " + selP.apellidos, SM[selP.estatus][lang], selP.location_name) +
+      "\n" +
+      t.shareDisclosure;
     const ok = await nativeShare({ title: selP.nombres + " " + selP.apellidos, text, url });
     if (!ok) setView("share");
   };
   const shareTo = async (target: "wa" | "tg" | "ig" | "copy") => {
     if (!selP) return;
     const url = patientUrl(selP.id);
-    const text = shareText(selP.nombres + " " + selP.apellidos, SM[selP.estatus][lang], selP.location_name);
+    const text =
+      shareText(selP.nombres + " " + selP.apellidos, SM[selP.estatus][lang], selP.location_name) +
+      "\n" +
+      t.shareDisclosure;
     if (target === "wa") openShare(whatsappUrl(url, text));
     else if (target === "tg") openShare(telegramUrl(url, text));
     else if (target === "ig") {
@@ -859,10 +996,102 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     clearEdit();
   };
 
+  // ---- Volunteer management (admin-only, via server API) -----------------
+  const loadVolunteers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/volunteers");
+      if (!res.ok) return;
+      const j = await res.json();
+      setVolunteers(Array.isArray(j.volunteers) ? j.volunteers : []);
+    } catch {
+      /* offline / non-fatal */
+    }
+  }, []);
+  const genPass = () =>
+    setVolPass(Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase() + "9!");
+  const createVolunteer = async () => {
+    if (!volEmail.trim() || volPass.length < 6) {
+      showToast(t.volCreateErr);
+      return;
+    }
+    setVolBusy(true);
+    try {
+      const res = await fetch("/api/admin/volunteers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: volEmail.trim(), password: volPass }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showToast(j.emailed ? t.volCreated : t.volCreatedNoMail);
+        setVolEmail("");
+        setVolPass("");
+        loadVolunteers();
+      } else {
+        showToast(t.volCreateErr);
+      }
+    } catch {
+      showToast(t.volCreateErr);
+    } finally {
+      setVolBusy(false);
+    }
+  };
+  const revokeVolunteer = async (user_id: string) => {
+    try {
+      const res = await fetch("/api/admin/volunteers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id }),
+      });
+      if (res.ok) {
+        showToast(t.volRevoked);
+        setVolunteers((v) => v.filter((x) => x.user_id !== user_id));
+      }
+    } catch {
+      /* non-fatal */
+    }
+  };
+
+  // ---- List photo upload (staff): forward to n8n via /api/lists ----------
+  const onPickList = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    setListBusy(true);
+    try {
+      const b64 = await compressImage(file); // data URL (compressed JPEG)
+      const res = await fetch("/api/lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_b64: b64,
+          filename: file.name,
+          note: listNote.trim() || null,
+          location_id: listLoc || null,
+        }),
+      });
+      if (res.ok) {
+        showToast(t.listSent);
+        setListNote("");
+      } else {
+        showToast(t.listError);
+      }
+    } catch {
+      showToast(t.listError);
+    } finally {
+      setListBusy(false);
+    }
+  };
+
+  // Load the volunteer list when an admin opens that tab.
+  useEffect(() => {
+    if (view === "admin" && adminTab === "voluntarios" && isAdmin) loadVolunteers();
+  }, [view, adminTab, isAdmin, loadVolunteers]);
+
   // ---- Derived view bits -------------------------------------------------
   const centerFilterOpts = locations.filter((l) => stateF === "all" || l.state === stateF);
   const statusOpts: { v: Estatus; label: string }[] = ESTATUS_ORDER.map((k) => ({ v: k, label: SM[k][lang] }));
-  const canDelete = !!(editType && editId);
+  const canDelete = !!(editType && editId) && isAdmin; // volunteers can't delete
 
   const chips: { key: "all" | Estatus; label: string; dotCls: string }[] = [
     { key: "all", label: t.all, dotCls: "" },
@@ -892,14 +1121,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             </div>
           </div>
           <div className="hright">
-            {/* Admin entry is hidden from the public UI; it only appears once a
-                Supabase session exists (sign in via the local /signup page). */}
-            {isAdmin && (
+            {/* Staff entry (admin or volunteer); hidden from the public UI. It only
+                appears once a Supabase session with a staff role exists. */}
+            {(isAdmin || isVolunteer) && (
               <button
                 className="gear"
                 onClick={() => {
                   setView("admin");
-                  setAdminTab("centros");
+                  setAdminTab(isAdmin ? "centros" : "personas");
                   clearEdit();
                 }}
               >
@@ -911,6 +1140,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </svg>
               </button>
             )}
+            <button className="gear" onClick={() => setView("volunteer")} aria-label={t.volunteer}>
+              {ICON.volunteer}
+            </button>
             <button className="donate-btn" onClick={() => setView("donate")} aria-label={lang === "es" ? "Donar" : "Donate"}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z" />
@@ -1018,6 +1250,30 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <path d="M5 12h14" />
             </svg>
+          </button>
+        </div>
+      )}
+
+      {!view && (
+        <div className={"heatctl " + (showHeat ? "heatctl-on" : "")}>
+          {showHeat && (
+            <div className="heatleg">
+              <span className="heatleg-title">{t.feltIntensity}</span>
+              <span className="heatleg-bar" />
+              <span className="heatleg-lbls">
+                <span>{t.intLeve}</span>
+                <span>{t.intSevera}</span>
+              </span>
+              <span className="heatleg-src">
+                {damage.source === "usgs" && damage.aftershocks.length > 0
+                  ? `${damage.aftershocks.length} ${t.aftershocks} · USGS`
+                  : t.damagePreliminary}
+              </span>
+            </div>
+          )}
+          <button className="heatbtn" onClick={() => setShowHeat((s) => !s)} aria-pressed={showHeat}>
+            {ICON.flame}
+            {t.damageLayer}
           </button>
         </div>
       )}
@@ -1230,7 +1486,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
               <div className="bubble">
                 <div className={"ogcard " + SM[selP.estatus].cls}>
                   <div className="ogimg">
-                    {selP.foto_url ? (
+                    {selP.foto_url && !selP.is_minor ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={selP.foto_url} alt="" />
                     ) : (
@@ -1244,10 +1500,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                       <span className="dot"></span>
                       {SM[selP.estatus][lang] + " · " + selP.location_name}
                     </span>
-                    <span className="ogurl">{"helpmapve.net/p/" + slug(selP.nombres + " " + selP.apellidos)}</span>
+                    <span className="ogurl">{"helpmapvzla.net/p/" + slug(selP.nombres + " " + selP.apellidos)}</span>
                   </div>
                 </div>
-                <span className="blink">{"helpmapve.net/p/" + slug(selP.nombres + " " + selP.apellidos)}</span>
+                <span className="blink">{"helpmapvzla.net/p/" + slug(selP.nombres + " " + selP.apellidos)}</span>
                 <span className="btime">12:48 ✓✓</span>
               </div>
             </div>
@@ -1266,6 +1522,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 {t.copyLink}
               </button>
             </div>
+            <p className="share-disc">{ICON.check}{t.shareDisclosure}</p>
           </div>
         </div>
       )}
@@ -1292,7 +1549,70 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </a>
               ))}
             </div>
+            <div className="donate-join">
+              <span className="donate-join-t">{t.donateJoin}</span>
+              <span className="donate-desc">{t.donateJoinSub}</span>
+              <div className="dactions" style={{ marginTop: 11 }}>
+                {VOLUNTEER.whatsapp && (
+                  <a
+                    className="btnp"
+                    href={`https://wa.me/${VOLUNTEER.whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(t.donateJoin)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {ICON.wa}
+                    {t.whatsapp}
+                  </a>
+                )}
+                <a className="btng" href={`mailto:${VOLUNTEER.email}?subject=${encodeURIComponent(t.donateJoin)}`}>
+                  {ICON.mail}
+                  {t.donateJoinCta}
+                </a>
+              </div>
+            </div>
             <p className="donate-note">{t.donateNote}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Volunteer overlay (recruit health/rescue staff with real info) ---- */}
+      {view === "volunteer" && (
+        <div className="overlay">
+          <div className="ovhead">
+            <button className="oicon" onClick={() => setView(null)}>
+              {ICON.back}
+            </button>
+            <span className="ohtitle">{t.volunteerTitle}</span>
+          </div>
+          <div className="ovbody">
+            <p className="donate-sub">{t.volunteerSub}</p>
+            <div className="vol-roles">
+              {VOLUNTEER_ROLES.map((r) => (
+                <div className="vol-role" key={r.es}>
+                  <span className="vol-check">{ICON.check}</span>
+                  <span>{r[lang]}</span>
+                </div>
+              ))}
+            </div>
+            <p className="vol-ask">{t.volunteerAsk}</p>
+            <div className="dactions">
+              {VOLUNTEER.whatsapp && (
+                <a
+                  className="btnp"
+                  href={`https://wa.me/${VOLUNTEER.whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(t.volunteerWaMsg)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {ICON.wa}
+                  {t.volunteerWa}
+                </a>
+              )}
+              <a className="btng" href={`mailto:${VOLUNTEER.email}?subject=${encodeURIComponent(t.volunteerEmailSubj)}`}>
+                {ICON.mail}
+                {t.volunteerEmail}
+              </a>
+            </div>
+            <p className="donate-note">{t.volunteerNote}</p>
           </div>
         </div>
       )}
@@ -1308,6 +1628,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           </div>
           <div className="ovbody">
             <div className="form">
+              <div className="infoneed">
+                <span className="infoneed-t">{t.infoNeededTitle}</span>
+                <span className="infoneed-d">{t.infoNeeded}</span>
+              </div>
               {pending > 0 && (
                 <div className="stale">
                   {ICON.wifiOff}
@@ -1472,7 +1796,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     autoComplete="username"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="admin@helpmapve.net"
+                    placeholder="admin@helpmapvzla.net"
                   />
                 </div>
                 <div className="fld">
@@ -1503,15 +1827,17 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             <>
               {!editType && (
                 <div className="admtabs">
-                  <button
-                    className={"atab " + (adminTab === "centros" ? "atab-on" : "")}
-                    onClick={() => {
-                      setAdminTab("centros");
-                      clearEdit();
-                    }}
-                  >
-                    {t.tabCenters}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      className={"atab " + (adminTab === "centros" ? "atab-on" : "")}
+                      onClick={() => {
+                        setAdminTab("centros");
+                        clearEdit();
+                      }}
+                    >
+                      {t.tabCenters}
+                    </button>
+                  )}
                   <button
                     className={"atab " + (adminTab === "personas" ? "atab-on" : "")}
                     onClick={() => {
@@ -1521,6 +1847,26 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   >
                     {t.tabPeople}
                   </button>
+                  <button
+                    className={"atab " + (adminTab === "listas" ? "atab-on" : "")}
+                    onClick={() => {
+                      setAdminTab("listas");
+                      clearEdit();
+                    }}
+                  >
+                    {t.tabLists}
+                  </button>
+                  {isAdmin && (
+                    <button
+                      className={"atab " + (adminTab === "voluntarios" ? "atab-on" : "")}
+                      onClick={() => {
+                        setAdminTab("voluntarios");
+                        clearEdit();
+                      }}
+                    >
+                      {t.tabVolunteers}
+                    </button>
+                  )}
                 </div>
               )}
               <div className="ovbody">
@@ -1529,10 +1875,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     <circle cx="12" cy="12" r="9" />
                     <path d="M12 11v5M12 8h.01" />
                   </svg>
-                  {t.adminLocalNote}
+                  {isAdmin ? t.adminLocalNote : t.volReviewNote}
                 </div>
 
-                {adminTab === "centros" && !editType && (
+                {adminTab === "centros" && isAdmin && !editType && (
                   <div>
                     <button className="addbtn" onClick={newCenter}>
                       {ICON.plus}
@@ -1579,12 +1925,100 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                           <button className="amini" onClick={() => editPerson(p)}>
                             {ICON.edit}
                           </button>
-                          <button className="amini del" onClick={() => deletePerson(p.id)}>
-                            {ICON.trash}
-                          </button>
+                          {isAdmin && (
+                            <button className="amini del" onClick={() => deletePerson(p.id)}>
+                              {ICON.trash}
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {adminTab === "listas" && !editType && (
+                  <div className="form">
+                    <div className="note" style={{ marginBottom: 4 }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="16" rx="2" />
+                        <path d="M7 9h10M7 13h10M7 17h6" />
+                      </svg>
+                      {t.listHint}
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_ubic}</span>
+                      <select className="fselect" value={listLoc} onChange={(e) => setListLoc(e.target.value)}>
+                        <option value="">{t.selectHosp}</option>
+                        {locations.map((l) => (
+                          <option key={l.location_id} value={l.location_id}>
+                            {l.canonical_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.listNote}</span>
+                      <input className="finput" value={listNote} onChange={(e) => setListNote(e.target.value)} placeholder={t.listNote} />
+                    </div>
+                    <label className="upload">
+                      <input type="file" accept="image/*" capture="environment" onChange={onPickList} style={{ display: "none" }} disabled={listBusy} />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 16V4M8 8l4-4 4 4" />
+                        <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+                      </svg>
+                      {listBusy ? t.listSending : t.listPick}
+                    </label>
+                  </div>
+                )}
+
+                {adminTab === "voluntarios" && isAdmin && !editType && (
+                  <div className="form">
+                    <div className="fld">
+                      <span className="flabel">{t.email}</span>
+                      <input
+                        className="finput"
+                        type="email"
+                        autoComplete="off"
+                        value={volEmail}
+                        onChange={(e) => setVolEmail(e.target.value)}
+                        placeholder="voluntario@correo.com"
+                      />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.volPass}</span>
+                      <div className="frow" style={{ alignItems: "stretch" }}>
+                        <input
+                          className="finput mono"
+                          value={volPass}
+                          onChange={(e) => setVolPass(e.target.value)}
+                          placeholder="••••••"
+                        />
+                        <button type="button" className="btng" style={{ flex: "0 0 auto" }} onClick={genPass}>
+                          {t.volGenerate}
+                        </button>
+                      </div>
+                    </div>
+                    <button className="btnp" onClick={createVolunteer} disabled={volBusy}>
+                      {ICON.plus}
+                      {volBusy ? "…" : t.volCreate}
+                    </button>
+
+                    <div style={{ marginTop: 16 }}>
+                      {volunteers.length === 0 && <div className="empty">{t.volNone}</div>}
+                      {volunteers.map((v) => (
+                        <div className="arow" key={v.user_id}>
+                          <div className="ai">
+                            <div className="aname">{v.email}</div>
+                            <div className="asub">{t.tabVolunteers}</div>
+                          </div>
+                          <div className="aacts">
+                            <button className="amini del" onClick={() => revokeVolunteer(v.user_id)}>
+                              {ICON.trash}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

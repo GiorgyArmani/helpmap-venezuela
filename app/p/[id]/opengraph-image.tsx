@@ -48,8 +48,13 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           <div style={{ fontSize: 32, color: "#a7adb6" }}>{place}</div>
         </div>
 
-        <div style={{ display: "flex", fontSize: 26, color: "#7b818c" }}>
-          helpmapve.net · Caracas · La Guaira · Miranda
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", fontSize: 24, color: "#9aa3af", maxWidth: 1000, lineHeight: 1.3 }}>
+            Datos confirmados en campo por contactos en centros de salud.
+          </div>
+          <div style={{ display: "flex", fontSize: 26, color: "#7b818c" }}>
+            helpmapvzla.net · Caracas · La Guaira · Miranda
+          </div>
         </div>
       </div>
     ),

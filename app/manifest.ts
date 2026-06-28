@@ -16,8 +16,8 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "es",
     categories: ["medical", "health", "social"],
     icons: [
-      { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-      { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+      { src: "/ico.png", sizes: "1000x1000", type: "image/png", purpose: "any" },
+      { src: "/ico.png", sizes: "1000x1000", type: "image/png", purpose: "maskable" },
     ],
   };
 }

@@ -11,7 +11,7 @@
  *
  * Bump CACHE_VERSION to discard old caches on the next visit.
  */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const SHELL_CACHE = `helpmap-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `helpmap-static-${CACHE_VERSION}`;
 const TILE_CACHE = `helpmap-tiles-${CACHE_VERSION}`;
@@ -19,7 +19,7 @@ const DATA_CACHE = `helpmap-data-${CACHE_VERSION}`;
 const KEEP = [SHELL_CACHE, STATIC_CACHE, TILE_CACHE, DATA_CACHE];
 
 const TILE_HOSTS = ["basemaps.cartocdn.com", "unpkg.com"];
-const PRECACHE = ["/", "/login", "/manifest.webmanifest", "/icon.svg"];
+const PRECACHE = ["/", "/login", "/manifest.webmanifest", "/ico.png"];
 
 const OFFLINE_HTML = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

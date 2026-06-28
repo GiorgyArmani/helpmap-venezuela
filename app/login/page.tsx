@@ -52,7 +52,7 @@ export default function LoginPage() {
           autoComplete="username"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="admin@helpmapve.net"
+          placeholder="admin@helpmapvzla.net"
         />
 
         <label style={S.label}>Contraseña</label>

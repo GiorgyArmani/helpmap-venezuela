@@ -112,11 +112,14 @@ export async function GET(_req: Request, ctx: RouteContext<"/p/[id]/story">) {
 
   const footer = (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{ height: 1, background: HAIRLINE, marginBottom: 34 }} />
+      <div style={{ height: 1, background: HAIRLINE, marginBottom: 26 }} />
+      <div style={{ fontSize: 22, color: "#6B7280", display: "flex", marginBottom: 24, maxWidth: 900, lineHeight: 1.3 }}>
+        Datos confirmados en campo por contactos en centros de salud.
+      </div>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 24, letterSpacing: 3, color: "#9AA3AF" }}>BUSCA A TUS SERES QUERIDOS</div>
-          <div style={{ fontSize: 52, fontWeight: 800, color: "#FFFFFF", letterSpacing: -1 }}>helpmapve.net</div>
+          <div style={{ fontSize: 52, fontWeight: 800, color: "#FFFFFF", letterSpacing: -1 }}>helpmapvzla.net</div>
         </div>
         <div style={{ fontSize: 24, color: "#6B7280", display: "flex" }}>Caracas · La Guaira · Miranda</div>
       </div>
