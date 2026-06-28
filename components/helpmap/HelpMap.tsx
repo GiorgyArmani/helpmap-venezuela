@@ -226,7 +226,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [draft, setDraft] = useState<Draft | null>(null);
   const [geoQuery, setGeoQuery] = useState("");
   const [geoBusy, setGeoBusy] = useState(false);
-  const [geoResults, setGeoResults] = useState<Array<{ lat: number; lng: number; label: string }>>([]);
+  const [geoResults, setGeoResults] = useState<
+    Array<{ lat: number; lng: number; label: string; address?: Record<string, string> }>
+  >([]);
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [patients, setPatients] = useState<PatientPublic[]>([]);
@@ -863,15 +865,22 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setGeoBusy(true);
     setGeoResults([]);
     try {
-      let hits: Array<{ lat: number; lng: number; label: string }> = [];
+      let hits: Array<{ lat: number; lng: number; label: string; address?: Record<string, string> }> = [];
       for (const q of queries) {
+        // addressdetails=1 → structured address so picking a result can also fill the
+        // state + municipality fields (not just lat/lng + name).
         const url =
-          "https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ve&addressdetails=0&q=" +
+          "https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ve&addressdetails=1&q=" +
           encodeURIComponent(q);
         const res = await fetch(url, { headers: { "Accept-Language": lang } });
-        const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+        const data = (await res.json()) as Array<{
+          lat: string;
+          lon: string;
+          display_name: string;
+          address?: Record<string, string>;
+        }>;
         hits = (data || [])
-          .map((h) => ({ lat: parseFloat(h.lat), lng: parseFloat(h.lon), label: h.display_name }))
+          .map((h) => ({ lat: parseFloat(h.lat), lng: parseFloat(h.lon), label: h.display_name, address: h.address }))
           .filter((h) => isFinite(h.lat) && isFinite(h.lng));
         if (hits.length) break;
       }
@@ -891,8 +900,21 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       setGeoBusy(false);
     }
   };
-  const pickGeoResult = (r: { lat: number; lng: number; label: string }) => {
-    setDraft((d) => ({ ...(d || {}), lat: r.lat.toFixed(6), lng: r.lng.toFixed(6) }));
+  const pickGeoResult = (r: { lat: number; lng: number; label: string; address?: Record<string, string> }) => {
+    // Nominatim's display_name leads with the POI name (e.g. "IVSS Hospital Dr.
+    // Plácido Rodríguez Rivero, La Mosca, San Felipe, …"); use that first segment to
+    // auto-fill the center name. addressdetails also lets us fill state + municipality.
+    const picked = r.label.split(",")[0].trim();
+    const muni = municipalityFromAddress(r.address);
+    const st = veStateFromAddress(r.address, r.label);
+    setDraft((d) => ({
+      ...(d || {}),
+      lat: r.lat.toFixed(6),
+      lng: r.lng.toFixed(6),
+      canonical_name: picked || d?.canonical_name || "",
+      ...(muni ? { municipality: muni } : {}),
+      ...(st ? { state: st } : {}),
+    }));
     setGeoResults([]);
     mapRef.current?.setView([r.lat, r.lng], 16, { animate: true });
     showToast(t.geoFound);
@@ -1785,7 +1807,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             <button className="oicon" onClick={() => setView(null)}>
               {ICON.back}
             </button>
-            <span className="ohtitle">{contactKind === "volunteer" ? t.volunteerTitle : t.donateJoin}</span>
+            <span className="ohtitle">{t.contactTitle}</span>
           </div>
           <div className="ovbody">
             {cDone ? (
@@ -1799,21 +1821,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
               </div>
             ) : (
             <div className="form">
-              <div className="seg" style={{ marginBottom: 4 }}>
-                <button
-                  className={"segb " + (contactKind === "volunteer" ? "segb-on" : "")}
-                  onClick={() => setContactKind("volunteer")}
-                >
-                  {t.contactSegVol}
-                </button>
-                <button
-                  className={"segb " + (contactKind === "donation" ? "segb-on" : "")}
-                  onClick={() => setContactKind("donation")}
-                >
-                  {t.contactSegDon}
-                </button>
-              </div>
-              <p className="donate-sub">{contactKind === "volunteer" ? t.volunteerAsk : t.donateJoinSub}</p>
+              <p className="donate-sub">{t.contactSub}</p>
               <div className="fld">
                 <span className="flabel">{t.contactName}</span>
                 <input className="finput" value={cName} onChange={(e) => setCName(e.target.value)} placeholder={t.contactName} />
