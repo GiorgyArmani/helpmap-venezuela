@@ -30,7 +30,7 @@ font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:#f7f8f9;color
 a{display:inline-block;margin-top:16px;background:#15181d;color:#fff;text-decoration:none;
 padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600}</style></head>
 <body><div class="b"><h1>Sin conexión</h1>
-<p>No hay conexión y esta página no está en caché todavía. Abrí el mapa cuando tengas internet al menos una vez.</p>
+<p>No hay conexión y esta página no está en caché todavía. Abre el mapa cuando tengas internet al menos una vez.</p>
 <a href="/">Reintentar</a></div></body></html>`;
 
 self.addEventListener("install", (event) => {

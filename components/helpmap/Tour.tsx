@@ -129,7 +129,7 @@ const SLIDES: Slide[] = [
       {
         t: { es: "Publicado", en: "Published" },
         d: {
-          es: "Recién ahí aparece en el mapa, con su sello verde «Verificado». Las fotos de menores nunca se muestran.",
+          es: "Solo entonces aparece en el mapa, con su sello verde «Verificado». Las fotos de menores nunca se muestran.",
           en: "Only then does it appear on the map, with its green “Verified” badge. Photos of minors are never shown.",
         },
       },
