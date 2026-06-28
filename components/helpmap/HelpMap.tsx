@@ -38,7 +38,7 @@ import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer";
+type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer" | "contact";
 
 // External donation partners surfaced in the "Donar" panel.
 const DONATIONS: { name: string; url: string; desc: { es: string; en: string } }[] = [
@@ -224,12 +224,15 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [editType, setEditType] = useState<EditType>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [geoQuery, setGeoQuery] = useState("");
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoResults, setGeoResults] = useState<Array<{ lat: number; lng: number; label: string }>>([]);
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [patients, setPatients] = useState<PatientPublic[]>([]);
   const [stale, setStale] = useState(false);
   const [mapReady, setMapReady] = useState(false);
-  const [showHeat, setShowHeat] = useState(true); // damage heat overlay on by default (urgency)
+  const [showHeat, setShowHeat] = useState(false); // damage heat overlay off by default (user toggles "Daños")
   const [damage, setDamage] = useState<DamageData>(SEED_DAMAGE); // USGS-fed, seed fallback
 
   // Auth
@@ -249,6 +252,17 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [listBusy, setListBusy] = useState(false);
   const [listNote, setListNote] = useState("");
   const [listLoc, setListLoc] = useState("");
+
+  // Public "write to us" form (in-app email + image attachments)
+  const [cName, setCName] = useState("");
+  const [cEmail, setCEmail] = useState("");
+  const [cMsg, setCMsg] = useState("");
+  const [cImgs, setCImgs] = useState<string[]>([]);
+  const [cBusy, setCBusy] = useState(false);
+  const [cDone, setCDone] = useState(false); // shows the "we got your message" confirmation panel
+  // Why the user is writing: drives the email subject + form copy. The contact form
+  // is only reached from the volunteer / donations CTAs (no generic contact entry).
+  const [contactKind, setContactKind] = useState<"volunteer" | "donation">("volunteer");
 
   // Public intake form + offline queue
   const [rNom, setRNom] = useState("");
@@ -344,7 +358,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   }, []);
 
   // ---- First-run app tour (shown once; reopenable from the header "?") -------
+  // Reads localStorage, which doesn't exist during SSR, so this must run in an
+  // effect (not a lazy initializer). The one-time setState is intentional.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (typeof window !== "undefined" && !localStorage.getItem(TOUR_KEY)) setTourOpen(true);
   }, []);
   const closeTour = () => {
@@ -793,11 +810,15 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setEditType(null);
     setEditId(null);
     setDraft(null);
+    setGeoQuery("");
+    setGeoResults([]);
   };
 
   const editCenter = (l: Location) => {
     setEditType("center");
     setEditId(l.location_id);
+    setGeoQuery("");
+    setGeoResults([]);
     setDraft({
       canonical_name: l.canonical_name,
       type: l.type,
@@ -810,8 +831,85 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const newCenter = () => {
     setEditType("center");
     setEditId(null);
+    setGeoQuery("");
+    setGeoResults([]);
     setDraft({ canonical_name: "", type: "hospital", state: "distrito_capital", municipality: "", lat: "", lng: "" });
   };
+
+  // Geocode by NAME or address via OpenStreetMap Nominatim (free, no key — same
+  // tile provider we already use). In Venezuela addresses are vague, so searching
+  // by the center's name (e.g. "Hospital Plácido Rodríguez Rivero") works best —
+  // Nominatim indexes POIs by name. Returns several candidates so the admin PICKS
+  // the right one and then VERIFIES the pin (CLAUDE.md §13). Falls back to the
+  // typed center name if the search box is empty.
+  const geocodeAddress = async () => {
+    const term = geoQuery.trim() || draft?.canonical_name?.trim() || "";
+    if (!term) return;
+    const muni = draft?.municipality?.trim() || "";
+    const stateName = draft?.state ? STATE_LABEL[draft.state] : "";
+    // Try the most specific query first, then progressively drop the location
+    // bias. Nominatim matches POI names fairly strictly: extra tokens that aren't
+    // in the OSM name (a municipality, "Venezuela") can drop an otherwise-good
+    // match to zero, so we stop at the first query that returns any hit and fall
+    // back to the bare name. countrycodes=ve already scopes to Venezuela, so we
+    // never append the country. Space-joined (commas trigger stricter parsing).
+    const queries = [
+      [term, muni, stateName],
+      [term, stateName],
+      [term],
+    ]
+      .map((p) => p.filter(Boolean).join(" "))
+      .filter((q, i, arr) => q && arr.indexOf(q) === i);
+    setGeoBusy(true);
+    setGeoResults([]);
+    try {
+      let hits: Array<{ lat: number; lng: number; label: string }> = [];
+      for (const q of queries) {
+        const url =
+          "https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ve&addressdetails=0&q=" +
+          encodeURIComponent(q);
+        const res = await fetch(url, { headers: { "Accept-Language": lang } });
+        const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+        hits = (data || [])
+          .map((h) => ({ lat: parseFloat(h.lat), lng: parseFloat(h.lon), label: h.display_name }))
+          .filter((h) => isFinite(h.lat) && isFinite(h.lng));
+        if (hits.length) break;
+      }
+      if (!hits.length) {
+        showToast(t.geoNotFound);
+        return;
+      }
+      // One clear match → apply it. Several → let the admin choose.
+      if (hits.length === 1) {
+        pickGeoResult(hits[0]);
+      } else {
+        setGeoResults(hits);
+      }
+    } catch {
+      showToast(t.geoNotFound);
+    } finally {
+      setGeoBusy(false);
+    }
+  };
+  const pickGeoResult = (r: { lat: number; lng: number; label: string }) => {
+    setDraft((d) => ({ ...(d || {}), lat: r.lat.toFixed(6), lng: r.lng.toFixed(6) }));
+    setGeoResults([]);
+    mapRef.current?.setView([r.lat, r.lng], 16, { animate: true });
+    showToast(t.geoFound);
+  };
+  // Mirror a center change to the n8n workflow so it keeps its intake LISTS dropdown
+  // + dedup alias/loc maps in sync (CLAUDE.md §13 feedback loop). Best-effort: the
+  // Supabase write already succeeded; this never blocks the UI.
+  const notifyCenter = (action: "created" | "updated" | "deleted", center: Partial<Location>) => {
+    fetch("/api/centers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, center }),
+    }).catch(() => {
+      /* offline / not configured — non-fatal */
+    });
+  };
+
   // Admin writes go to the BASE tables via the authenticated session (CLAUDE.md
   // §9). RLS must grant the authenticated role write access (see runbook).
   const saveCenter = async () => {
@@ -847,10 +945,12 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       return;
     }
     setLocations((ls) => (editId ? ls.map((l) => (l.location_id === obj.location_id ? obj : l)) : [...ls, obj]));
+    notifyCenter(editId ? "updated" : "created", obj);
     clearEdit();
     showToast(t.savedC);
   };
   const deleteCenter = async (id: string) => {
+    const center = locById[id];
     // Hard delete. If people still reference this center the FK blocks it, so we
     // surface that instead of silently wiping patient records.
     const { error } = await getSupabase().from("locations").delete().eq("location_id", id);
@@ -861,6 +961,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setLocations((ls) => ls.filter((l) => l.location_id !== id));
     setPatients((ps) => ps.filter((p) => p.location_id !== id));
     setLocationSel((cur) => (cur === id ? null : cur));
+    notifyCenter("deleted", center ?? { location_id: id });
     clearEdit();
     showToast(t.deleted);
   };
@@ -1083,10 +1184,52 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     }
   };
 
-  // Load the volunteer list when an admin opens that tab.
-  useEffect(() => {
-    if (view === "admin" && adminTab === "voluntarios" && isAdmin) loadVolunteers();
-  }, [view, adminTab, isAdmin, loadVolunteers]);
+  // ---- Volunteer / donation email (in-app, via nodemailer) ---------------
+  const openContact = (kind: "volunteer" | "donation") => {
+    setContactKind(kind);
+    setCDone(false);
+    setView("contact");
+  };
+  const onPickContactPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || cImgs.length >= 4) return;
+    try {
+      const b64 = await compressImage(file);
+      setCImgs((a) => (a.length >= 4 ? a : [...a, b64]));
+    } catch {
+      showToast(t.photoError);
+    }
+  };
+  const sendContact = async () => {
+    if (!cMsg.trim()) {
+      showToast(t.contactError);
+      return;
+    }
+    setCBusy(true);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: contactKind, name: cName.trim(), email: cEmail.trim(), message: cMsg.trim(), images: cImgs }),
+      });
+      if (res.ok) {
+        // Show an in-form confirmation panel (more reassuring than a quick toast):
+        // it mirrors the auto-acknowledgment email the user also receives.
+        setCName("");
+        setCEmail("");
+        setCMsg("");
+        setCImgs([]);
+        setCDone(true);
+      } else {
+        showToast(t.contactError);
+      }
+    } catch {
+      showToast(t.contactError);
+    } finally {
+      setCBusy(false);
+    }
+  };
 
   // ---- Derived view bits -------------------------------------------------
   const centerFilterOpts = locations.filter((l) => stateF === "all" || l.state === stateF);
@@ -1097,8 +1240,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     { key: "all", label: t.all, dotCls: "" },
     { key: "INGRESADO", label: SM.INGRESADO[lang], dotCls: "cdot-adm" },
     { key: "ALTA", label: SM.ALTA[lang], dotCls: "cdot-ok" },
-    // FALLECIDO filter hidden for now (records still appear under "Todos").
-    // { key: "FALLECIDO", label: SM.FALLECIDO[lang], dotCls: "cdot-dec" },
+    // FALLECIDO is shown (the team needs this data). Kept respectful per CLAUDE.md §2:
+    // muted styling (cdot-dec); only verified records are ever published.
+    { key: "FALLECIDO", label: SM.FALLECIDO[lang], dotCls: "cdot-dec" },
   ];
 
   const rootStyle = accent ? ({ ["--accent"]: accent } as React.CSSProperties) : undefined;
@@ -1113,13 +1257,20 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
       <div className="topbar">
         <div className="hrow">
-          <div className="brand">
-            <span className="logo"></span>
+          <a
+            className="brand"
+            href="https://www.helpmapvzla.net"
+            title="by tropicalsadness x imagenesnacionales"
+          >
+            <span className="logo">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/ico.png" alt="HelpMap VE" />
+            </span>
             <div className="bcol">
               <span className="bname">{t.appName}</span>
-              <span className="btag">{t.tagline}</span>
+              <span className="btag">helpmapvzla.net</span>
             </div>
-          </div>
+          </a>
           <div className="hright">
             {/* Staff entry (admin or volunteer); hidden from the public UI. It only
                 appears once a Supabase session with a staff role exists. */}
@@ -1128,7 +1279,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 className="gear"
                 onClick={() => {
                   setView("admin");
-                  setAdminTab(isAdmin ? "centros" : "personas");
+                  setAdminTab("centros"); // staff (admin + volunteer) can now manage centers
                   clearEdit();
                 }}
               >
@@ -1140,6 +1291,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </svg>
               </button>
             )}
+            <button className="gear" onClick={() => openContact("volunteer")} aria-label={t.contact}>
+              {ICON.mail}
+            </button>
             <button className="gear" onClick={() => setView("volunteer")} aria-label={t.volunteer}>
               {ICON.volunteer}
             </button>
@@ -1319,6 +1473,13 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           </div>
         </button>
         <div className="list">
+          {/* Trust note: dataset is field-confirmed + call for collaborators. Lives in
+              the list (contextual to the data), so it never covers the map. */}
+          <button className="trustbar" onClick={() => setView("volunteer")}>
+            <span className="trust-ic">{ICON.check}</span>
+            <span className="trust-txt">{t.trustLine}</span>
+            <span className="trust-cta">{t.trustCta}</span>
+          </button>
           {list.map((p) => (
             <button key={p.id} className={"card " + SM[p.estatus].cls} onClick={() => openDetail(p)}>
               <Avatar p={p} cls="av" />
@@ -1555,7 +1716,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
               <div className="dactions" style={{ marginTop: 11 }}>
                 {VOLUNTEER.whatsapp && (
                   <a
-                    className="btnp"
+                    className="btng"
                     href={`https://wa.me/${VOLUNTEER.whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(t.donateJoin)}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -1564,10 +1725,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     {t.whatsapp}
                   </a>
                 )}
-                <a className="btng" href={`mailto:${VOLUNTEER.email}?subject=${encodeURIComponent(t.donateJoin)}`}>
+                <button className="btnp" onClick={() => openContact("donation")}>
                   {ICON.mail}
                   {t.donateJoinCta}
-                </a>
+                </button>
               </div>
             </div>
             <p className="donate-note">{t.donateNote}</p>
@@ -1598,7 +1759,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             <div className="dactions">
               {VOLUNTEER.whatsapp && (
                 <a
-                  className="btnp"
+                  className="btng"
                   href={`https://wa.me/${VOLUNTEER.whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(t.volunteerWaMsg)}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -1607,12 +1768,96 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   {t.volunteerWa}
                 </a>
               )}
-              <a className="btng" href={`mailto:${VOLUNTEER.email}?subject=${encodeURIComponent(t.volunteerEmailSubj)}`}>
+              <button className="btnp" onClick={() => openContact("volunteer")}>
                 {ICON.mail}
                 {t.volunteerEmail}
-              </a>
+              </button>
             </div>
             <p className="donate-note">{t.volunteerNote}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Contact overlay (public; sends an in-app email + image attachments) ---- */}
+      {view === "contact" && (
+        <div className="overlay">
+          <div className="ovhead">
+            <button className="oicon" onClick={() => setView(null)}>
+              {ICON.back}
+            </button>
+            <span className="ohtitle">{contactKind === "volunteer" ? t.volunteerTitle : t.donateJoin}</span>
+          </div>
+          <div className="ovbody">
+            {cDone ? (
+              <div className="contact-ack">
+                <div className="contact-ack-ico">{ICON.check}</div>
+                <h3 className="contact-ack-title">{t.contactAckTitle}</h3>
+                <p className="contact-ack-body">{t.contactAckBody}</p>
+                <button className="btnp" onClick={() => setView(null)}>
+                  {t.contactAckClose}
+                </button>
+              </div>
+            ) : (
+            <div className="form">
+              <div className="seg" style={{ marginBottom: 4 }}>
+                <button
+                  className={"segb " + (contactKind === "volunteer" ? "segb-on" : "")}
+                  onClick={() => setContactKind("volunteer")}
+                >
+                  {t.contactSegVol}
+                </button>
+                <button
+                  className={"segb " + (contactKind === "donation" ? "segb-on" : "")}
+                  onClick={() => setContactKind("donation")}
+                >
+                  {t.contactSegDon}
+                </button>
+              </div>
+              <p className="donate-sub">{contactKind === "volunteer" ? t.volunteerAsk : t.donateJoinSub}</p>
+              <div className="fld">
+                <span className="flabel">{t.contactName}</span>
+                <input className="finput" value={cName} onChange={(e) => setCName(e.target.value)} placeholder={t.contactName} />
+              </div>
+              <div className="fld">
+                <span className="flabel">{t.contactEmailLabel}</span>
+                <input className="finput" type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" />
+              </div>
+              <div className="fld">
+                <span className="flabel">{t.contactMsg}</span>
+                <textarea className="finput" rows={5} value={cMsg} onChange={(e) => setCMsg(e.target.value)} placeholder={t.contactMsg} />
+              </div>
+              <div className="fld">
+                <span className="flabel">{t.contactPhotos}</span>
+                {cImgs.length > 0 && (
+                  <div className="cimg-grid">
+                    {cImgs.map((src, i) => (
+                      <div className="cimg" key={i}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt="" />
+                        <button type="button" className="cimg-x" onClick={() => setCImgs((a) => a.filter((_, n) => n !== i))}>
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {cImgs.length < 4 && (
+                  <label className="upload">
+                    <input type="file" accept="image/*" onChange={onPickContactPhoto} style={{ display: "none" }} />
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 16V4M8 8l4-4 4 4" />
+                      <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+                    </svg>
+                    {t.contactAddPhoto}
+                  </label>
+                )}
+              </div>
+              <button className="btnp" onClick={sendContact} disabled={cBusy}>
+                {ICON.mail}
+                {cBusy ? t.contactSending : t.contactSend}
+              </button>
+            </div>
+            )}
           </div>
         </div>
       )}
@@ -1827,17 +2072,15 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             <>
               {!editType && (
                 <div className="admtabs">
-                  {isAdmin && (
-                    <button
-                      className={"atab " + (adminTab === "centros" ? "atab-on" : "")}
-                      onClick={() => {
-                        setAdminTab("centros");
-                        clearEdit();
-                      }}
-                    >
-                      {t.tabCenters}
-                    </button>
-                  )}
+                  <button
+                    className={"atab " + (adminTab === "centros" ? "atab-on" : "")}
+                    onClick={() => {
+                      setAdminTab("centros");
+                      clearEdit();
+                    }}
+                  >
+                    {t.tabCenters}
+                  </button>
                   <button
                     className={"atab " + (adminTab === "personas" ? "atab-on" : "")}
                     onClick={() => {
@@ -1862,6 +2105,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                       onClick={() => {
                         setAdminTab("voluntarios");
                         clearEdit();
+                        loadVolunteers();
                       }}
                     >
                       {t.tabVolunteers}
@@ -1878,7 +2122,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   {isAdmin ? t.adminLocalNote : t.volReviewNote}
                 </div>
 
-                {adminTab === "centros" && isAdmin && !editType && (
+                {adminTab === "centros" && !editType && (
                   <div>
                     <button className="addbtn" onClick={newCenter}>
                       {ICON.plus}
@@ -1899,9 +2143,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                           <button className="amini" onClick={() => editCenter(l)}>
                             {ICON.edit}
                           </button>
-                          <button className="amini del" onClick={() => deleteCenter(l.location_id)}>
-                            {ICON.trash}
-                          </button>
+                          {isAdmin && (
+                            <button className="amini del" onClick={() => deleteCenter(l.location_id)}>
+                              {ICON.trash}
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -2051,6 +2297,42 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     <div className="fld">
                       <span className="flabel">{t.f_parish}</span>
                       <input className="finput" value={draft?.municipality || ""} onChange={setD("municipality")} placeholder={t.f_parish} />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_address}</span>
+                      <div className="geo-row">
+                        <input
+                          className="finput"
+                          value={geoQuery}
+                          onChange={(e) => setGeoQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              if (!geoBusy) geocodeAddress();
+                            }
+                          }}
+                          placeholder={draft?.canonical_name || t.f_address}
+                        />
+                        <button className="btng geo-btn" onClick={geocodeAddress} disabled={geoBusy} type="button">
+                          {geoBusy ? t.geoSearching : t.geoSearch}
+                        </button>
+                      </div>
+                      {geoResults.length > 0 ? (
+                        <div className="geo-results">
+                          <span className="fhint">{t.geoPick}</span>
+                          {geoResults.map((r, i) => (
+                            <button key={i} type="button" className="geo-res" onClick={() => pickGeoResult(r)}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 21s-6-5.7-6-10a6 6 0 0 1 12 0c0 4.3-6 10-6 10Z" />
+                                <circle cx="12" cy="11" r="2" />
+                              </svg>
+                              <span>{r.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="fhint">{t.geoHint}</span>
+                      )}
                     </div>
                     <div className="frow">
                       <div className="fld">

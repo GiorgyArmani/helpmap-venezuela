@@ -2,7 +2,14 @@
 // The app reads the privacy-filtered `patients_public` VIEW and the `locations`
 // table only — never the base `patients` table. See CLAUDE.md §2, §4.
 
-export type VzlaState = "distrito_capital" | "la_guaira" | "miranda";
+export type VzlaState =
+  | "distrito_capital"
+  | "la_guaira"
+  | "miranda"
+  | "yaracuy"
+  | "falcon"
+  | "carabobo"
+  | "aragua";
 export type LocationType = "hospital" | "shelter" | "morgue" | "donation_centre";
 export type Estatus = "INGRESADO" | "ALTA" | "FALLECIDO";
 export type Sexo = "M" | "F";
@@ -50,6 +57,10 @@ export const STATE_LABEL: Record<VzlaState, string> = {
   distrito_capital: "Distrito Capital",
   la_guaira: "La Guaira",
   miranda: "Miranda",
+  yaracuy: "Yaracuy",
+  falcon: "Falcón",
+  carabobo: "Carabobo",
+  aragua: "Aragua",
 };
 
 export interface TypeMeta {
@@ -99,6 +110,7 @@ export interface Strings {
   loginError: string; loginHint: string; adminLocalNote: string; loggedInAs: string;
   f_contact: string; f_minor: string; queuedOffline: string; pendingSync: string; synced: string; reqNameLoc: string;
   igCopied: string; noteMinors: string;
+  f_address: string; geoSearch: string; geoSearching: string; geoFound: string; geoNotFound: string; geoHint: string; geoPick: string;
   photoBusy: string; photoError: string; removePhoto: string;
   f_procedencia: string; f_procedenciaPh: string; f_procedenciaHint: string;
   storyBuilding: string; storyShared: string; storyDownloaded: string; storyError: string;
@@ -113,6 +125,12 @@ export interface Strings {
   donateJoin: string; donateJoinSub: string; donateJoinCta: string;
   infoNeededTitle: string; infoNeeded: string;
   shareDisclosure: string;
+  trustLine: string; trustCta: string;
+  contact: string; contactTitle: string; contactSub: string; contactName: string;
+  contactEmailLabel: string; contactMsg: string; contactPhotos: string; contactAddPhoto: string;
+  contactSend: string; contactSending: string; contactSent: string; contactError: string;
+  contactAckTitle: string; contactAckBody: string; contactAckClose: string;
+  contactSegVol: string; contactSegDon: string;
   tabVolunteers: string; tabLists: string;
   addVolunteer: string; volPass: string; volGenerate: string; volCreate: string;
   volCreated: string; volCreatedNoMail: string; volCreateErr: string;
@@ -158,6 +176,10 @@ export const T: Record<Lang, Strings> = {
     reqNameLoc: "Indica al menos nombre o apellido y el centro.",
     igCopied: "Enlace copiado. Pégalo en tu historia o perfil de Instagram.",
     noteMinors: "La información de menores de edad está estrictamente protegida: nunca mostramos sus fotos. Su visualización completa se limita exclusivamente a personal médico y familiares.",
+    f_address: "Buscar por nombre o dirección", geoSearch: "Buscar", geoSearching: "Buscando…",
+    geoFound: "Ubicación encontrada — verifica el pin en el mapa", geoNotFound: "No se encontró. Prueba con el nombre del centro o ingresa lat/lng a mano.",
+    geoHint: "Escribe el nombre del centro (ej. \"Hospital Central San Felipe\") o una dirección y pulsa Buscar. Verifica siempre el pin.",
+    geoPick: "Varias coincidencias — elige la correcta:",
     photoBusy: "Procesando foto…",
     photoError: "No se pudo procesar la imagen. Intenta con otra.",
     removePhoto: "Quitar foto",
@@ -205,6 +227,26 @@ export const T: Record<Lang, Strings> = {
       "Buscamos especialmente datos verificables de Morón, San Felipe y el estado Yaracuy, y de más hospitales en las zonas afectadas. Cualquier aporte suma.",
     shareDisclosure:
       "HelpMap trabaja para que solo datos confirmados en campo por contactos en centros de salud lleguen a la app.",
+    trustLine: "Datos confirmados en campo. Nuestro compromiso es ser una fuente verídica — ayúdanos a clarificar aún más.",
+    trustCta: "Colaborar",
+    contact: "Contacto",
+    contactTitle: "Escríbenos",
+    contactSub: "Envíanos un mensaje. Puedes adjuntar imágenes (por ejemplo, listas o documentos).",
+    contactName: "Tu nombre (opcional)",
+    contactEmailLabel: "Tu correo (para responderte)",
+    contactMsg: "Mensaje",
+    contactPhotos: "Imágenes (opcional)",
+    contactAddPhoto: "Adjuntar imagen",
+    contactSend: "Enviar mensaje",
+    contactSending: "Enviando…",
+    contactSent: "Mensaje enviado. Gracias.",
+    contactError: "No se pudo enviar. Intenta de nuevo.",
+    contactAckTitle: "¡Recibimos tu mensaje!",
+    contactAckBody:
+      "Estamos evaluando tu solicitud y nos pondremos en contacto contigo tan pronto como sea posible. Si dejaste tu correo, también te enviamos esta confirmación allí. Gracias por sumarte.",
+    contactAckClose: "Entendido",
+    contactSegVol: "Voluntariado",
+    contactSegDon: "Donaciones",
     tabVolunteers: "Voluntarios",
     tabLists: "Subir listas",
     addVolunteer: "Nuevo voluntario",
@@ -263,6 +305,10 @@ export const T: Record<Lang, Strings> = {
     reqNameLoc: "Enter at least a first/last name and the center.",
     igCopied: "Link copied. Paste it in your Instagram story or profile.",
     noteMinors: "Minors' information is strictly protected: we never show their photos. Full visibility is limited exclusively to medical staff and family members.",
+    f_address: "Search by name or address", geoSearch: "Search", geoSearching: "Searching…",
+    geoFound: "Location found — verify the pin on the map", geoNotFound: "Not found. Try the center's name or enter lat/lng manually.",
+    geoHint: "Type the center's name (e.g. \"Hospital Central San Felipe\") or an address and tap Search. Always verify the pin.",
+    geoPick: "Several matches — pick the right one:",
     photoBusy: "Processing photo…",
     photoError: "Couldn't process the image. Try another one.",
     removePhoto: "Remove photo",
@@ -310,6 +356,26 @@ export const T: Record<Lang, Strings> = {
       "We're especially looking for verifiable data from Morón, San Felipe and Yaracuy state, and from more hospitals in the affected areas. Every contribution helps.",
     shareDisclosure:
       "HelpMap works so that only data confirmed in the field by health-center contacts reaches the app.",
+    trustLine: "Field-confirmed data. Our commitment is to be a truthful source — help us clarify it further.",
+    trustCta: "Help out",
+    contact: "Contact",
+    contactTitle: "Write to us",
+    contactSub: "Send us a message. You can attach images (e.g. lists or documents).",
+    contactName: "Your name (optional)",
+    contactEmailLabel: "Your email (so we can reply)",
+    contactMsg: "Message",
+    contactPhotos: "Images (optional)",
+    contactAddPhoto: "Attach image",
+    contactSend: "Send message",
+    contactSending: "Sending…",
+    contactSent: "Message sent. Thank you.",
+    contactError: "Couldn't send. Try again.",
+    contactAckTitle: "We got your message!",
+    contactAckBody:
+      "We're reviewing your request and will get in touch as soon as possible. If you left your email, we also sent this confirmation there. Thank you for reaching out.",
+    contactAckClose: "Got it",
+    contactSegVol: "Volunteer",
+    contactSegDon: "Donations",
     tabVolunteers: "Volunteers",
     tabLists: "Upload lists",
     addVolunteer: "New volunteer",

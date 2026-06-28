@@ -17,10 +17,11 @@ body{margin:0;background:#fff}
 .topbar{position:absolute;left:0;right:0;top:0;z-index:600;padding:12px 12px 0;display:flex;flex-direction:column;gap:9px;pointer-events:none}
 .hrow,.searchbar,.chips,.frow2{pointer-events:auto}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
-/* Brand is hidden on mobile (decluttered); shown small on desktop. */
-.brand{display:none;align-items:center;gap:8px;background:#fff;padding:6px 11px 6px 7px;border-radius:12px;box-shadow:0 3px 12px rgba(16,20,28,.12);border:1px solid var(--line)}
-.logo{width:24px;height:24px;border-radius:8px;background:radial-gradient(circle at 50% 38%,#fff 0 3px,transparent 4px),var(--accent);flex:0 0 auto}
-.bcol{display:flex;flex-direction:column}
+/* Brand shows a compact logo on mobile; the text label is desktop-only. */
+.brand{display:flex;align-items:center;gap:8px;background:#fff;padding:7px;border-radius:12px;box-shadow:0 3px 12px rgba(16,20,28,.12);border:1px solid var(--line);text-decoration:none;color:inherit;cursor:pointer}
+.logo{width:30px;height:30px;border-radius:8px;overflow:hidden;background:var(--accent);flex:0 0 auto}
+.logo img{width:100%;height:100%;object-fit:cover;display:block}
+.bcol{display:none;flex-direction:column}
 .bname{font-weight:700;font-size:13px;letter-spacing:-.3px;line-height:1.05}
 .btag{font-size:9px;color:var(--mut);letter-spacing:.1px;margin-top:1px}
 .hright{display:flex;align-items:center;gap:8px;margin-left:auto}
@@ -124,6 +125,14 @@ body{margin:0;background:#fff}
 .fhint{font-size:11px;color:var(--mut);line-height:1.35}
 .finput,.fselect{border:1px solid var(--line);border-radius:11px;padding:13px 12px;font-size:14px;font-family:inherit;outline:none;background:#fff;color:var(--ink);width:100%}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.geo-row{display:flex;gap:8px;align-items:stretch}
+.geo-row .finput{flex:1}
+.geo-btn{flex:0 0 auto;padding:13px 16px;white-space:nowrap}
+.geo-btn:disabled{opacity:.6;cursor:default}
+.geo-results{display:flex;flex-direction:column;gap:4px;margin-top:2px}
+.geo-res{display:flex;align-items:flex-start;gap:8px;text-align:left;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px 11px;font-size:12.5px;line-height:1.35;color:var(--ink);cursor:pointer;font-family:inherit}
+.geo-res:active{background:var(--soft2)}
+.geo-res svg{width:15px;height:15px;color:var(--mut);flex:0 0 auto;margin-top:1px}
 .seg{display:flex;gap:8px}
 .segb{flex:1;border:1px solid var(--line);background:#fff;border-radius:11px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;color:var(--mut)}
 .segb-on{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -187,7 +196,9 @@ body{margin:0;background:#fff}
    minimal. The patient list docks bottom-left. */
 @media (min-width:768px){
   .topbar{padding:16px 18px 0}
-  .brand{display:flex}
+  .brand{padding:6px 11px 6px 7px}
+  .brand .logo{width:24px;height:24px}
+  .bcol{display:flex}
   .searchbar,.frow2,.chips{max-width:540px;width:100%;margin-left:auto;margin-right:auto}
   .chips{justify-content:center}
   .sheet{left:12px;right:auto;width:430px;max-width:calc(100% - 24px);bottom:12px;border-radius:18px;box-shadow:0 14px 44px rgba(16,20,28,.18)}
@@ -211,6 +222,12 @@ body{margin:0;background:#fff}
 .donate-btn{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:0 3px 12px rgba(16,20,28,.12);height:38px;padding:0 12px;font-size:12.5px;font-weight:700;color:#c0392b;cursor:pointer;font-family:inherit}
 .donate-btn svg{width:16px;height:16px}
 .donate-sub{font-size:14px;line-height:1.5;color:#454a53;margin:0 0 16px}
+.contact-ack{display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 14px 10px;gap:14px}
+.contact-ack-ico{width:58px;height:58px;border-radius:50%;background:rgba(39,174,96,.12);color:#1e9e5a;display:flex;align-items:center;justify-content:center}
+.contact-ack-ico svg{width:30px;height:30px}
+.contact-ack-title{margin:0;font-size:19px;font-weight:800;color:var(--ink)}
+.contact-ack-body{margin:0;font-size:14px;line-height:1.6;color:#454a53;max-width:340px}
+.contact-ack .btnp{margin-top:6px;align-self:stretch}
 .donate-list{display:flex;flex-direction:column;gap:11px}
 .donate-card{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--line);border-radius:14px;padding:15px 16px;text-decoration:none;background:#fff}
 .donate-info{display:flex;flex-direction:column;gap:3px}
@@ -237,6 +254,20 @@ body{margin:0;background:#fff}
 .vol-check{flex:0 0 auto;width:22px;height:22px;border-radius:7px;background:#e9f7ef;color:#1c8a4e;display:flex;align-items:center;justify-content:center}
 .vol-check svg{width:13px;height:13px}
 .vol-ask{font-size:13.5px;line-height:1.5;color:#454a53;margin:0 0 14px}
+
+/* ---- Trust strip (field-confirmed + call for collaborators) ---- */
+.trustbar{display:flex;align-items:center;gap:9px;width:100%;margin:0 0 10px;padding:9px 11px;border:1px solid #cdedd9;background:#f1faf4;border-radius:12px;cursor:pointer;font-family:inherit;text-align:left}
+.trustbar .trust-ic{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:#1c8a4e;color:#fff;display:flex;align-items:center;justify-content:center}
+.trustbar .trust-ic svg{width:12px;height:12px}
+.trust-txt{flex:1;font-size:11px;line-height:1.35;color:#15603a;font-weight:600}
+.trust-cta{flex:0 0 auto;font-size:11.5px;font-weight:800;color:#fff;background:#1c8a4e;border-radius:8px;padding:6px 11px}
+
+/* ---- Contact form (write to us + image attachments) ---- */
+textarea.finput{resize:vertical;min-height:96px;font-family:inherit;line-height:1.45}
+.cimg-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.cimg{position:relative;width:72px;height:72px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.cimg img{width:100%;height:100%;object-fit:cover;display:block}
+.cimg-x{position:absolute;top:3px;right:3px;width:18px;height:18px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:10px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
 
 /* ---- Share: verification disclosure ---- */
 .share-disc{display:flex;align-items:flex-start;gap:7px;margin:16px 2px 0;font-size:11.5px;line-height:1.45;color:var(--mut)}

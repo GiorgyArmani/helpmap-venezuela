@@ -27,8 +27,15 @@ function getTransport(): nodemailer.Transporter | null {
     transporter = nodemailer.createTransport({
       host: HOST,
       port: PORT,
-      secure: PORT === 465, // 465 = implicit TLS/SSL
+      secure: PORT === 465, // 465 = implicit TLS/SSL; 587 = STARTTLS (secure:false)
       auth: { user: USER, pass: PASS },
+      // Fail fast instead of hanging ~22s when the port is blocked / unreachable.
+      connectionTimeout: 10000,
+      greetingTimeout: 8000,
+      socketTimeout: 15000,
+      // cPanel/shared-hosting mail certs often don't match the mail.* hostname —
+      // accept them so sending through the provider's own server still works.
+      tls: { rejectUnauthorized: false },
     });
   }
   return transporter;
@@ -54,6 +61,101 @@ export async function sendMail(to: string, subject: string, html: string, text?:
     console.error("[email] send failed:", e);
     return false;
   }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
+  );
+}
+
+// Turns a data URL (or raw base64) into a nodemailer attachment.
+function toAttachment(dataUrl: string, i: number) {
+  const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+  const contentType = m?.[1] || "image/jpeg";
+  const content = m ? m[2] : dataUrl;
+  const ext = contentType.split("/")[1]?.split("+")[0] || "jpg";
+  return { filename: `adjunto-${i + 1}.${ext}`, content, encoding: "base64" as const, contentType };
+}
+
+// Inbound contact message from an app user (text + optional image attachments).
+// Goes to the team inbox; reply-to is the user's email (if valid) so the team can
+// reply directly. Returns false if SMTP isn't configured.
+export async function sendContactEmail(opts: {
+  kind?: "volunteer" | "donation";
+  name?: string;
+  replyTo?: string;
+  message: string;
+  images?: string[];
+}): Promise<boolean> {
+  const tx = getTransport();
+  if (!tx) return false;
+  const to = process.env.CONTACT_TO || USER;
+  const kindLabel =
+    opts.kind === "volunteer" ? "Voluntariado" : opts.kind === "donation" ? "Donaciones" : "Contacto";
+  const safeName = (opts.name || "Anónimo").slice(0, 120);
+  const replyTo = opts.replyTo && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(opts.replyTo) ? opts.replyTo : undefined;
+  const html = `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;color:#16191f">
+    <h2 style="margin:0 0 10px">Nuevo mensaje · ${kindLabel}</h2>
+    <p style="margin:0 0 4px;color:#555;font-size:13px"><b>De:</b> ${escapeHtml(safeName)}${
+      replyTo ? ` &lt;${escapeHtml(replyTo)}&gt;` : " (sin correo)"
+    }</p>
+    <div style="white-space:pre-wrap;font-size:14px;line-height:1.5;background:#f7f8f9;border:1px solid #ebecef;border-radius:10px;padding:14px 16px;margin-top:10px">${escapeHtml(
+      opts.message,
+    )}</div>
+  </div>`;
+  try {
+    await tx.sendMail({
+      from: FROM,
+      to,
+      replyTo,
+      subject: `[${kindLabel}] ${safeName} · HelpMap`,
+      html,
+      attachments: (opts.images || []).slice(0, 4).map(toAttachment),
+    });
+    return true;
+  } catch (e) {
+    console.error("[email] contact send failed:", e);
+    return false;
+  }
+}
+
+// Auto-acknowledgment sent back to a user who wrote to us through the in-app
+// contact form. Reassures them the team received the message and will follow up.
+// Best-effort: returns false (and the caller ignores it) if SMTP isn't configured
+// or no valid reply address was supplied.
+export async function sendContactAck(opts: {
+  to: string;
+  kind?: "volunteer" | "donation";
+  name?: string;
+}): Promise<boolean> {
+  const to = opts.to;
+  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return false;
+  const tx = getTransport();
+  if (!tx) return false;
+  const greetName = (opts.name || "").trim().slice(0, 80);
+  const hi = greetName ? `Hola ${escapeHtml(greetName)},` : "Hola,";
+  const intro =
+    opts.kind === "volunteer"
+      ? "Gracias por ofrecerte como voluntario/a en HelpMap Venezuela."
+      : opts.kind === "donation"
+        ? "Gracias por proponer tu iniciativa de donaciones a HelpMap Venezuela."
+        : "Gracias por escribir a HelpMap Venezuela.";
+  const html = `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#16191f">
+    <h2 style="margin:0 0 6px">¡Recibimos tu mensaje!</h2>
+    <p style="color:#555;line-height:1.6;font-size:14px">${escapeHtml(hi)}</p>
+    <p style="color:#555;line-height:1.6;font-size:14px">
+      ${intro} <b>Estamos evaluando tu solicitud y nos pondremos en contacto contigo
+      tan pronto como sea posible.</b>
+    </p>
+    <p style="color:#888;font-size:12px;line-height:1.6;margin-top:16px">
+      Este es un mensaje automático de confirmación; no necesitas responderlo. Si no
+      escribiste a HelpMap Venezuela, puedes ignorar este correo.
+    </p>
+  </div>`;
+  return sendMail(to, "Recibimos tu mensaje · HelpMap Venezuela", html);
 }
 
 // Onboarding email for a newly created volunteer account.
