@@ -209,6 +209,46 @@ const ICON = {
   ),
 };
 
+// Map a Nominatim address (or the display label as fallback) to one of our VzlaState
+// enum values. Only returns a value when it matches a state we support — otherwise
+// null, so we never set an invalid enum on the draft. Handles common variants:
+// "Estado/Edo." prefixes, "Vargas" (old name of La Guaira), "Capital District".
+const STATE_FROM_LABEL: Array<[VzlaState, string[]]> = [
+  ["distrito_capital", ["distrito capital", "capital district", "dtto capital"]],
+  ["la_guaira", ["la guaira", "vargas"]],
+  ["miranda", ["miranda"]],
+  ["yaracuy", ["yaracuy"]],
+  ["falcon", ["falcon"]],
+  ["carabobo", ["carabobo"]],
+  ["aragua", ["aragua"]],
+];
+function veStateFromAddress(address?: Record<string, string>, label?: string): VzlaState | null {
+  const candidates = [
+    address?.state,
+    address?.state_district,
+    address?.region,
+    // last resort: scan the display label, which usually contains "Estado X".
+    label,
+  ]
+    .filter(Boolean)
+    .map((s) => norm(s as string).replace(/^(estado|edo\.?)\s+/, ""));
+  for (const c of candidates) {
+    for (const [enumVal, needles] of STATE_FROM_LABEL) {
+      if (needles.some((n) => c.includes(n))) return enumVal;
+    }
+  }
+  return null;
+}
+
+// Pick the best "municipio" from a Nominatim address and strip the "Municipio " prefix
+// so we store just the name (e.g. "Municipio San Felipe" → "San Felipe").
+function municipalityFromAddress(address?: Record<string, string>): string | null {
+  if (!address) return null;
+  const raw = address.municipality || address.county || address.city_district || address.city || "";
+  const cleaned = raw.replace(/^(municipio|mcpio\.?|mun\.?)\s+/i, "").trim();
+  return cleaned || null;
+}
+
 export default function HelpMap({ accent, mapLabels = true, showReport = true }: HelpMapProps) {
   const [lang, setLang] = useState<Lang>("es");
   const [view, setView] = useState<View>(null);
