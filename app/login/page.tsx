@@ -29,7 +29,7 @@ export default function LoginPage() {
         router.push("/");
       }
     } catch {
-      setErr("No se pudo iniciar sesión. Intentá de nuevo.");
+      setErr("No se pudo iniciar sesión. Intenta de nuevo.");
     } finally {
       setBusy(false);
     }

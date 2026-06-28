@@ -52,9 +52,9 @@ const I = {
 const SLIDES: Slide[] = [
   {
     eyebrow: { es: "Bienvenido", en: "Welcome" },
-    title: { es: "Encontrá a tus seres queridos", en: "Find your loved ones" },
+    title: { es: "Encuentra a tus seres queridos", en: "Find your loved ones" },
     body: {
-      es: "Base de datos verificada de personas afectadas por el terremoto en Caracas, La Guaira y Miranda, en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
+      es: "Base de datos verificada de personas afectadas por el terremoto que afecto nuestro país el , en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
       en: "A verified database of people affected by the earthquake in Caracas, La Guaira and Miranda, continuously updated by medical staff in the field. It helps you locate your family.",
     },
     icon: I.heart,
