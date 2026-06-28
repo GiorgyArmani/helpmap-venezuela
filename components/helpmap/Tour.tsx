@@ -54,7 +54,7 @@ const SLIDES: Slide[] = [
     eyebrow: { es: "Bienvenido", en: "Welcome" },
     title: { es: "Encuentra a tus seres queridos", en: "Find your loved ones" },
     body: {
-      es: "Base de datos verificada de personas afectadas por el terremoto que afecto nuestro país el , en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
+      es: "Base de datos verificada de personas afectadas por el terremoto que afecto nuestro país el 24 de Junio 2026, en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
       en: "A verified database of people affected by the earthquake in Caracas, La Guaira and Miranda, continuously updated by medical staff in the field. It helps you locate your family.",
     },
     icon: I.heart,
