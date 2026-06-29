@@ -3581,7 +3581,20 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
       {!!toast && <div className="toast">{toast}</div>}
 
-      <Tour open={tourOpen} lang={lang} onClose={closeTour} />
+      <Tour
+        open={tourOpen}
+        lang={lang}
+        onClose={closeTour}
+        onLogin={
+          !user
+            ? () => {
+                closeTour();
+                setView("admin");
+                clearEdit();
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

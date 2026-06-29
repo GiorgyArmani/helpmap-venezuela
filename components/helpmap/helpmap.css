@@ -383,4 +383,7 @@ textarea.finput{resize:vertical;min-height:96px;font-family:inherit;line-height:
 .tour-next{flex:1;background:var(--accent);color:#fff;border:none;border-radius:13px;padding:14px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit}
 .tour-doclink{display:block;text-align:center;margin-top:12px;font-size:12.5px;font-weight:600;color:var(--mut);text-decoration:none}
 .tour-doclink:hover{color:var(--ink);text-decoration:underline}
+.tour-loginlink{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:10px;padding:11px;background:none;border:1px solid var(--line);border-radius:12px;font-size:12.5px;font-weight:600;color:var(--mut);cursor:pointer;font-family:inherit}
+.tour-loginlink:hover{color:var(--ink);border-color:var(--ink)}
+.tour-loginlink svg{width:15px;height:15px}
 @media(min-width:520px){.tourwrap{align-items:center}.tour{border-radius:22px}}

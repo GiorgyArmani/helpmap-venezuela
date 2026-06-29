@@ -185,7 +185,18 @@ const SLIDES: Slide[] = [
   },
 ];
 
-export default function Tour({ open, lang, onClose }: { open: boolean; lang: Lang; onClose: () => void }) {
+export default function Tour({
+  open,
+  lang,
+  onClose,
+  onLogin,
+}: {
+  open: boolean;
+  lang: Lang;
+  onClose: () => void;
+  // Staff login entry, shown under the docs link. Omitted when already signed in.
+  onLogin?: () => void;
+}) {
   const [i, setI] = useState(0);
   if (!open) return null;
 
@@ -244,6 +255,16 @@ export default function Tour({ open, lang, onClose }: { open: boolean; lang: Lan
         <a className="tour-doclink" href={lang === "en" ? "/docs?lang=en" : "/docs"}>
           {lang === "es" ? "Ver documentación" : "View documentation"}
         </a>
+
+        {onLogin && (
+          <button className="tour-loginlink" onClick={onLogin}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="11" width="16" height="9" rx="2" />
+              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+            </svg>
+            {lang === "es" ? "Ingresar (equipo)" : "Sign in (team)"}
+          </button>
+        )}
       </div>
     </div>
   );
