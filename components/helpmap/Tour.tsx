@@ -185,23 +185,97 @@ const SLIDES: Slide[] = [
   },
 ];
 
+// Staff onboarding — shown to volunteers/admins on sign-in so they "get up to date"
+// (reshow after updates by bumping STAFF_TOUR_KEY in HelpMap). Reflects the live-publish
+// trust model: staff changes go public immediately; access is revocable.
+const STAFF_SLIDES: Slide[] = [
+  {
+    eyebrow: { es: "Eres parte del equipo", en: "You're on the team" },
+    title: { es: "Bienvenido, voluntario", en: "Welcome, volunteer" },
+    body: {
+      es: "Gracias por ayudar a reunir familias. Tienes acceso de confianza: lo que publiques se refleja de inmediato. Úsalo con responsabilidad — podemos revocar el acceso en cualquier momento.",
+      en: "Thank you for helping reunite families. You have trusted access: what you publish reflects immediately. Use it responsibly — access can be revoked at any time.",
+    },
+    icon: I.hands,
+  },
+  {
+    eyebrow: { es: "Tu panel", en: "Your panel" },
+    title: { es: "Abre el panel del equipo", en: "Open the team panel" },
+    body: {
+      es: "Toca el ícono de menú (≡) arriba a la derecha. Tendrás pestañas: Centros, Personas, Listas, Donaciones y Rescatados.",
+      en: "Tap the menu icon (≡) at the top right. You'll get tabs: Centers, People, Lists, Donations and Rescued.",
+    },
+    icon: I.map,
+  },
+  {
+    eyebrow: { es: "Personas", en: "People" },
+    title: { es: "Agrega, edita y verifica", en: "Add, edit and verify" },
+    body: {
+      es: "En «Personas» agregas o editas registros. El interruptor «Verificado» publica la foto y el estatus (incluido fallecido). Sin verificar, el registro aparece pero sin foto.",
+      en: "In “People” you add or edit records. The “Verified” switch publishes the photo and status (including deceased). Unverified, a record still appears but without a photo.",
+    },
+    icon: I.shield,
+    steps: [
+      {
+        t: { es: "Verificado = público", en: "Verified = public" },
+        d: { es: "Solo marca verificado lo que confirmaste en campo.", en: "Only mark verified what you confirmed in the field." },
+      },
+      {
+        t: { es: "Menores protegidos", en: "Minors protected" },
+        d: { es: "Nunca se muestra foto ni cédula de un menor.", en: "A minor's photo and ID are never shown." },
+      },
+    ],
+  },
+  {
+    eyebrow: { es: "Aportes del público", en: "Public contributions" },
+    title: { es: "Pon caras a los registros", en: "Put faces to records" },
+    body: {
+      es: "La gente puede enviar fotos/datos de una persona. Aparecen DENTRO de la ficha de esa persona (con un contador ámbar en la lista). Ábrela y aprueba o rechaza cada aporte.",
+      en: "People can submit photos/info for a person. They appear INSIDE that person's card (with an amber counter in the list). Open it and approve or reject each contribution.",
+    },
+    icon: I.share,
+  },
+  {
+    eyebrow: { es: "Rescatados", en: "Rescued" },
+    title: { es: "Reporta rescatados con vida", en: "Report people rescued alive" },
+    body: {
+      es: "En «Rescatados» publicas a alguien sacado con vida aunque aún no sepas a qué centro fue. Cuando lo trasladen, promuévelo a paciente y aparecerá en el mapa.",
+      en: "In “Rescued” you publish someone pulled out alive even before you know which center they went to. When transferred, promote them to a patient and they appear on the map.",
+    },
+    icon: I.heart,
+  },
+  {
+    eyebrow: { es: "Subir listas", en: "Upload lists" },
+    title: { es: "Fotografía listas manuscritas", en: "Photograph handwritten lists" },
+    body: {
+      es: "¿Tienes una lista de pacientes en papel? Foto en «Listas» → el equipo la procesa (OCR) y entra al flujo. Borrar registros y centros queda solo para administradores.",
+      en: "Got a paper patient list? Photo it in “Lists” → the team processes it (OCR) into the flow. Deleting records and centers is admin-only.",
+    },
+    icon: I.upload,
+  },
+];
+
 export default function Tour({
   open,
   lang,
   onClose,
   onLogin,
+  variant = "public",
 }: {
   open: boolean;
   lang: Lang;
   onClose: () => void;
   // Staff login entry, shown under the docs link. Omitted when already signed in.
   onLogin?: () => void;
+  // "public" = first-run visitor tour; "staff" = volunteer/admin onboarding on sign-in.
+  variant?: "public" | "staff";
 }) {
   const [i, setI] = useState(0);
   if (!open) return null;
 
-  const s = SLIDES[i];
-  const last = i === SLIDES.length - 1;
+  const slides = variant === "staff" ? STAFF_SLIDES : SLIDES;
+  const s = slides[i];
+  const last = i === slides.length - 1;
   const L = (o: { es: string; en: string }) => o[lang];
 
   const next = () => (last ? onClose() : setI((n) => n + 1));
@@ -232,7 +306,7 @@ export default function Tour({
         )}
 
         <div className="tour-dots">
-          {SLIDES.map((_, n) => (
+          {slides.map((_, n) => (
             <span key={n} className={"tour-dot " + (n === i ? "tour-dot-on" : "")} />
           ))}
         </div>

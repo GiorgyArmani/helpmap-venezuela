@@ -194,7 +194,7 @@ export interface Strings {
   tabVolunteers: string; tabLists: string;
   addVolunteer: string; volPass: string; volGenerate: string; volCreate: string;
   volCreated: string; volCreatedNoMail: string; volCreateErr: string;
-  volRevoke: string; volRevoked: string; volNone: string; volReviewNote: string;
+  volRevoke: string; volRevoked: string; volNone: string; volReviewNote: string; staffGuide: string;
   listTitle: string; listHint: string; listPick: string; listSending: string;
   listSent: string; listError: string; listNote: string;
   tabDonations: string; addDonation: string; editDonation: string; savedDon: string;
@@ -337,7 +337,8 @@ export const T: Record<Lang, Strings> = {
     volRevoke: "Revocar",
     volRevoked: "Acceso revocado.",
     volNone: "Aún no hay voluntarios.",
-    volReviewNote: "Tus cambios pasan por revisión del equipo antes de publicarse.",
+    volReviewNote: "Tus cambios se publican de inmediato. Eres parte del equipo de confianza — actúa con responsabilidad; podemos revocar el acceso en cualquier momento.",
+    staffGuide: "Ver guía del equipo",
     listTitle: "Subir foto de lista",
     listHint:
       "Fotografía una lista de pacientes (manuscrita o impresa). Se envía al equipo para procesar (OCR) y revisar antes de publicarse.",
@@ -533,7 +534,8 @@ export const T: Record<Lang, Strings> = {
     volRevoke: "Revoke",
     volRevoked: "Access revoked.",
     volNone: "No volunteers yet.",
-    volReviewNote: "Your changes are reviewed by the team before publishing.",
+    volReviewNote: "Your changes publish immediately. You're trusted team — act responsibly; access can be revoked at any time.",
+    staffGuide: "View team guide",
     listTitle: "Upload list photo",
     listHint:
       "Photograph a patient list (handwritten or printed). It's sent to the team to process (OCR) and review before publishing.",

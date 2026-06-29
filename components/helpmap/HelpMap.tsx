@@ -69,6 +69,9 @@ type EditType = null | "center" | "person" | "donation" | "rescatado" | "promote
 const CACHE_KEY = "helpmap:data:v4";
 // Bump the version when tour content changes so returning users see it once more.
 const TOUR_KEY = "helpmap:tour:v2";
+// Staff onboarding tour — stored in sessionStorage so it shows once per browser
+// session (reappears next session so volunteers get up to date again).
+const STAFF_TOUR_KEY = "helpmap:staff-tour";
 
 interface Draft {
   // center
@@ -370,6 +373,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [rPhotoBusy, setRPhotoBusy] = useState(false);
   const [pending, setPending] = useState(() => (typeof window !== "undefined" ? queueCount() : 0));
   const [tourOpen, setTourOpen] = useState(false);
+  const [staffTourOpen, setStaffTourOpen] = useState(false);
 
   const t = T[lang];
 
@@ -463,6 +467,27 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       /* storage unavailable — non-fatal */
     }
   };
+
+  // ---- Staff onboarding tour (shown once per session; reopenable from the panel) --
+  // Fires once a staff session is resolved, once per BROWSER SESSION (sessionStorage):
+  // shown when they start using the app, never repeated that session; reappears on a
+  // fresh session so volunteers get up to date again next time they sit down.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if ((isAdmin || isVolunteer) && !tourOpen && !sessionStorage.getItem(STAFF_TOUR_KEY)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStaffTourOpen(true);
+    }
+  }, [isAdmin, isVolunteer, tourOpen]);
+  const closeStaffTour = () => {
+    setStaffTourOpen(false);
+    try {
+      sessionStorage.setItem(STAFF_TOUR_KEY, "1");
+    } catch {
+      /* storage unavailable — non-fatal */
+    }
+  };
+  const openStaffTour = () => setStaffTourOpen(true); // manual reopen from the panel
 
   // ---- Offline intake queue: flush on load and whenever connection returns --
   useEffect(() => {
@@ -1349,8 +1374,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       sexo: (d.sexo as Sexo) || null,
       location_id: loc.location_id,
       estatus: (d.estatus as Estatus) || "INGRESADO",
-      // The publish gate (§8). UI-gated to admins (the toggle is hidden for volunteers),
-      // so a volunteer save preserves whatever value was loaded into the draft.
+      // The publish gate (§8). Editable by all staff now (admin OR volunteer) — trusted
+      // contributors whose access is revocable; their work publishes without waiting.
       verified: !!d.verified,
     };
 
@@ -2756,6 +2781,15 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             </button>
             <span className="ohtitle">{t.adminTitle}</span>
             {user && (
+              <button className="staff-guide" onClick={openStaffTour} aria-label={t.staffGuide} title={t.staffGuide}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M9.5 9.5a2.5 2.5 0 0 1 4.5 1.5c0 1.7-2.5 2-2.5 3.5" />
+                  <path d="M12 17.5h.01" />
+                </svg>
+              </button>
+            )}
+            {user && (
               <button className="signout" onClick={signOut}>
                 {t.signOut}
               </button>
@@ -3358,9 +3392,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                         ))}
                       </select>
                     </div>
-                    {/* Verified is the publish gate (§8): a photo only shows publicly once
-                        the record is verified. Admin-only — volunteers' edits are reviewed. */}
-                    {isAdmin && (
+                    {/* Verified is the publish gate (§8): a photo / FALLECIDO only shows
+                        publicly once the record is verified. Open to all staff (admin OR
+                        volunteer) — volunteers are trusted and their access is revocable. */}
+                    {(isAdmin || isVolunteer) && (
                       <div className="fld">
                         <span className="flabel">{t.verified}</span>
                         <div className="seg">
@@ -3550,7 +3585,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                         ))}
                       </select>
                     </div>
-                    {isAdmin && (
+                    {(isAdmin || isVolunteer) && (
                       <div className="fld">
                         <span className="flabel">{t.verified}</span>
                         <div className="seg">
@@ -3595,6 +3630,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             : undefined
         }
       />
+
+      <Tour open={staffTourOpen} lang={lang} onClose={closeStaffTour} variant="staff" />
     </div>
   );
 }
