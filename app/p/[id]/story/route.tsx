@@ -37,7 +37,7 @@ async function loadPhoto(url: string | null): Promise<string | null> {
   }
 }
 
-export async function GET(_req: Request, ctx: RouteContext<"/p/[id]/story">) {
+export async function GET(req: Request, ctx: RouteContext<"/p/[id]/story">) {
   const { id } = await ctx.params;
   const p = await fetchPatient(id);
 
@@ -51,31 +51,42 @@ export async function GET(_req: Request, ctx: RouteContext<"/p/[id]/story">) {
   const initials = ((p.nombres[0] || "") + (p.apellidos[0] || "")).toUpperCase() || "··";
   const typeLabel = TYPE_META[p.location_type].es;
   const sub = `${typeLabel}${p.edad != null ? ` · ${p.edad} años` : ""}`;
+  // Single text node — Satori requires divs with >1 child to be display:flex, so
+  // we pre-join instead of rendering `{sub} · {STATE_LABEL[...]}` (3 children).
+  const placeLine = `${sub} · ${STATE_LABEL[p.state]}`;
 
   // Second lock: never a photo for a minor or unverified record.
   const canShowPhoto = !p.is_minor && p.verified && !!p.foto_url;
   const photo = canShowPhoto ? await loadPhoto(p.foto_url) : null;
 
+  // Real brand icon (public/ico.png) for the eyebrow — same mark as the app.
+  const icon = await loadPhoto(new URL(req.url).origin + "/ico.png");
+
   // ---- Reusable pieces -----------------------------------------------------
 
   const eyebrow = (
     <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-      <div
-        style={{
-          width: 50,
-          height: 50,
-          borderRadius: 14,
-          background: "#FFFFFF",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: INK,
-          fontSize: 30,
-          fontWeight: 800,
-        }}
-      >
-        H
-      </div>
+      {icon ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={icon} width={54} height={54} alt="" style={{ borderRadius: 15 }} />
+      ) : (
+        <div
+          style={{
+            width: 54,
+            height: 54,
+            borderRadius: 15,
+            background: "#FFFFFF",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: INK,
+            fontSize: 30,
+            fontWeight: 800,
+          }}
+        >
+          H
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: "column" }}>
         <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: 1, color: "#FFFFFF" }}>HELPMAP VENEZUELA</div>
         <div style={{ fontSize: 19, letterSpacing: 4, color: "#9AA3AF" }}>REGISTRO HUMANITARIO</div>
@@ -123,7 +134,10 @@ export async function GET(_req: Request, ctx: RouteContext<"/p/[id]/story">) {
           <div style={{ fontSize: 24, letterSpacing: 3, color: "#9AA3AF" }}>BUSCA A TUS SERES QUERIDOS</div>
           <div style={{ fontSize: 52, fontWeight: 800, color: "#FFFFFF", letterSpacing: -1 }}>helpmapvzla.net</div>
         </div>
-        <div style={{ fontSize: 24, color: "#6B7280", display: "flex" }}>Caracas · La Guaira · Miranda</div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#9AA3AF", display: "flex" }}>@helpmapvzla</div>
+          <div style={{ fontSize: 22, color: "#6B7280", display: "flex" }}>Caracas · La Guaira · Miranda</div>
+        </div>
       </div>
     </div>
   );
@@ -139,9 +153,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/p/[id]/story">) {
           <div style={{ fontSize: 88, fontWeight: 800, lineHeight: 1.0, letterSpacing: -2, color: "#FFFFFF" }}>{name}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ fontSize: 40, fontWeight: 600, color: "#E5E8EC" }}>{p.location_name}</div>
-            <div style={{ fontSize: 30, color: "#9AA3AF" }}>
-              {sub} · {STATE_LABEL[p.state]}
-            </div>
+            <div style={{ fontSize: 30, color: "#9AA3AF" }}>{placeLine}</div>
           </div>
         </div>
       </div>
@@ -211,9 +223,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/p/[id]/story">) {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
           <div style={{ fontSize: 88, fontWeight: 800, lineHeight: 1.0, letterSpacing: -2, color: "#FFFFFF" }}>{name}</div>
           <div style={{ fontSize: 40, fontWeight: 600, color: "#E5E8EC" }}>{p.location_name}</div>
-          <div style={{ fontSize: 30, color: "#9AA3AF" }}>
-            {sub} · {STATE_LABEL[p.state]}
-          </div>
+          <div style={{ fontSize: 30, color: "#9AA3AF" }}>{placeLine}</div>
         </div>
       </div>
       {footer}

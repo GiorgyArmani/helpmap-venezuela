@@ -9,7 +9,6 @@ import {
   TYPE_META,
   norm,
   protectMinor,
-  slug,
   worst,
   type Donation,
   type Estatus,
@@ -721,7 +720,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const selP = patients.find((p) => p.id === selId) || null;
   const selLoc = selP ? locById[selP.location_id] : null;
 
-  // Real sharing: native OS sheet if available, else the in-app share overlay.
+  // Sharing: on phones/tablets use the native OS share sheet (lets them pick
+  // WhatsApp/IG directly); on desktop show the in-app share menu instead — the
+  // Windows/macOS "Share link" dialog is awkward and hides our preview card +
+  // WhatsApp/Telegram/IG/copy actions.
   const shareCurrent = async () => {
     if (!selP) return;
     const url = patientUrl(selP.id);
@@ -729,8 +731,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       shareText(selP.nombres + " " + selP.apellidos, SM[selP.estatus][lang], selP.location_name) +
       "\n" +
       t.shareDisclosure;
-    const ok = await nativeShare({ title: selP.nombres + " " + selP.apellidos, text, url });
-    if (!ok) setView("share");
+    const touchDevice =
+      typeof window !== "undefined" &&
+      (window.matchMedia?.("(pointer: coarse)").matches || (navigator.maxTouchPoints ?? 0) > 0);
+    if (touchDevice) {
+      const ok = await nativeShare({ title: selP.nombres + " " + selP.apellidos, text, url });
+      if (ok) return;
+    }
+    setView("share");
   };
   const shareTo = async (target: "wa" | "tg" | "ig" | "copy") => {
     if (!selP) return;
@@ -1814,10 +1822,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                       <span className="dot"></span>
                       {SM[selP.estatus][lang] + " · " + selP.location_name}
                     </span>
-                    <span className="ogurl">{"helpmapvzla.net/p/" + slug(selP.nombres + " " + selP.apellidos)}</span>
+                    <span className="ogurl">{"helpmapvzla.net/p/" + selP.id.slice(0, 8) + "…"}</span>
                   </div>
                 </div>
-                <span className="blink">{"helpmapvzla.net/p/" + slug(selP.nombres + " " + selP.apellidos)}</span>
+                <span className="blink">{"helpmapvzla.net/p/" + selP.id.slice(0, 8) + "…"}</span>
                 <span className="btime">12:48 ✓✓</span>
               </div>
             </div>

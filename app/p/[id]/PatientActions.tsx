@@ -40,11 +40,18 @@ export default function PatientActions({
   };
 
   const share = async () => {
-    const ok = await nativeShare({ title: name, text, url });
-    if (!ok) {
-      const copied = await copyText(url);
-      flash(copied ? "Enlace copiado" : "No se pudo copiar");
+    // Phones/tablets: native OS share sheet. Desktop: copy the link (the
+    // WhatsApp/Telegram/copy buttons are already shown right below, and the
+    // OS "Share link" dialog is awkward on desktop).
+    const touchDevice =
+      typeof window !== "undefined" &&
+      (window.matchMedia?.("(pointer: coarse)").matches || (navigator.maxTouchPoints ?? 0) > 0);
+    if (touchDevice) {
+      const ok = await nativeShare({ title: name, text, url });
+      if (ok) return;
     }
+    const copied = await copyText(url);
+    flash(copied ? "Enlace copiado" : "No se pudo copiar");
   };
 
   // Generates the 1080×1920 story banner server-side, then opens the native
@@ -54,7 +61,7 @@ export default function PatientActions({
     setBuilding(true);
     const r = await shareStoryImage(id, name);
     if (r === "shared") flash("Comparte la imagen en tu historia y agrega el sticker de enlace.");
-    else if (r === "downloaded") flash("Imagen descargada. Súbela a tu historia de Instagram.");
+    else if (r === "downloaded") flash("Abrimos la imagen: mantén pulsado para guardarla y súbela a tu historia.");
     else flash("No se pudo crear la imagen. Intenta de nuevo.");
     setBuilding(false);
   };
