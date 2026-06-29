@@ -109,6 +109,6 @@ const S: Record<string, React.CSSProperties> = {
   grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 },
   t: { display: "flex", alignItems: "center", gap: 10, border: "1px solid #ebecef", borderRadius: 13, padding: 13, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "#fff", color: "#16191f", fontFamily: "inherit" },
   ti: { width: 30, height: 30, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, flex: "0 0 auto" },
-  back: { display: "inline-block", marginTop: 16, fontSize: 13, color: "#7b818c", textDecoration: "none" },
-  toast: { position: "fixed", left: "50%", bottom: 28, transform: "translateX(-50%)", background: "#15181d", color: "#fff", fontSize: 13, fontWeight: 600, padding: "12px 18px", borderRadius: 12, boxShadow: "0 8px 26px rgba(16,20,28,.34)", zIndex: 50, whiteSpace: "nowrap" },
+  back: { display: "block", width: "100%", textAlign: "center", marginTop: 16, fontSize: 13, color: "#7b818c", textDecoration: "none" },
+  toast: { position: "fixed", left: "50%", bottom: 28, transform: "translateX(-50%)", background: "#15181d", color: "#fff", fontSize: 13, fontWeight: 600, padding: "12px 18px", borderRadius: 12, boxShadow: "0 8px 26px rgba(16,20,28,.34)", zIndex: 50, maxWidth: "calc(100vw - 28px)", textAlign: "center", lineHeight: 1.35 },
 };

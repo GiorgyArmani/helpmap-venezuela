@@ -63,38 +63,36 @@ export async function copyText(text: string): Promise<boolean> {
 export type StoryShareResult = "shared" | "downloaded" | "error";
 
 export async function shareStoryImage(id: string, title: string): Promise<StoryShareResult> {
+  const storyUrl = patientPath(id) + "/story";
+
+  // Preferred path (mostly Android, and iOS when share is available): the native
+  // share sheet with the image FILE, so the user can pick Instagram → Story.
   try {
-    const res = await fetch(patientPath(id) + "/story");
-    if (!res.ok) return "error";
-    const blob = await res.blob();
-    const file = new File([blob], `helpmap-${id}.png`, { type: "image/png" });
-
-    const canShareFile =
-      typeof navigator !== "undefined" &&
-      typeof navigator.canShare === "function" &&
-      navigator.canShare({ files: [file] });
-
-    if (canShareFile && typeof navigator.share === "function") {
-      try {
-        await navigator.share({ files: [file], title });
-        return "shared";
-      } catch {
-        /* user cancelled → fall through to download */
+    const res = await fetch(storyUrl);
+    if (res.ok && typeof navigator !== "undefined" && typeof navigator.canShare === "function") {
+      const blob = await res.blob();
+      const file = new File([blob], `helpmap-${id}.png`, { type: "image/png" });
+      if (navigator.canShare({ files: [file] }) && typeof navigator.share === "function") {
+        try {
+          await navigator.share({ files: [file], title });
+          return "shared";
+        } catch {
+          /* user cancelled or activation lost → fall through to opening it */
+        }
       }
     }
-
-    const objUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objUrl;
-    a.download = `helpmap-${id}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(objUrl);
-    return "downloaded";
   } catch {
-    return "error";
+    /* fall through to the universal fallback */
   }
+
+  // Universal fallback (mobile-first): open the generated PNG in a new tab. On
+  // iOS the `<a download>` attribute is ignored, so we navigate to the image
+  // instead — the user long-presses to save it and uploads it to their story.
+  if (typeof window !== "undefined") {
+    window.open(storyUrl, "_blank", "noopener,noreferrer");
+    return "downloaded";
+  }
+  return "error";
 }
 
 // Native OS share sheet (mobile) — shows WhatsApp/Instagram/Telegram directly.

@@ -1454,7 +1454,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z" />
               </svg>
-              {t.donate}
+              <span className="donate-label">{t.donate}</span>
             </button>
             <button className="gear" onClick={() => setTourOpen(true)} aria-label={lang === "es" ? "Cómo funciona" : "How it works"}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

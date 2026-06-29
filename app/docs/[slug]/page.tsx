@@ -97,7 +97,7 @@ export default async function DocPage({ params, searchParams }: Props) {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { minHeight: "100vh", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#f7f8f9", padding: 20, fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#16191f" },
+  wrap: { minHeight: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#f7f8f9", padding: 20, fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#16191f" },
   card: { width: "100%", maxWidth: 640, background: "#fff", border: "1px solid #ebecef", borderRadius: 18, padding: 24, boxShadow: "0 10px 34px rgba(16,20,28,.10)", margin: "24px 0" },
   nav: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid #ebecef" },
   back: { fontSize: 13, fontWeight: 600, color: "#16191f", textDecoration: "none" },
@@ -116,7 +116,7 @@ const S: Record<string, React.CSSProperties> = {
   bullet: { fontSize: 13.5, lineHeight: 1.5, color: "#4b5159", marginBottom: 5 },
   note: { fontSize: 13, lineHeight: 1.5, color: "#4b5159", margin: "20px 0 0" },
   mail: { color: "#15181d", fontWeight: 600 },
-  actions: { display: "flex", gap: 10, marginTop: 16 },
+  actions: { display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 },
   secondary: { flex: 1, textAlign: "center", background: "#fff", color: "#16191f", border: "1px solid #ebecef", textDecoration: "none", padding: "13px 18px", borderRadius: 12, fontSize: 14, fontWeight: 600 },
   primary: { flex: 1, textAlign: "center", background: "#15181d", color: "#fff", textDecoration: "none", padding: "13px 18px", borderRadius: 12, fontSize: 14, fontWeight: 600 },
 };

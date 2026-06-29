@@ -95,7 +95,7 @@ export default async function PatientPage({ params }: Params) {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { minHeight: "100vh", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#f7f8f9", padding: 20, fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#16191f" },
+  wrap: { minHeight: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#f7f8f9", padding: 20, fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#16191f" },
   card: { width: "100%", maxWidth: 460, background: "#fff", border: "1px solid #ebecef", borderRadius: 18, padding: 22, boxShadow: "0 10px 34px rgba(16,20,28,.10)", marginTop: 24 },
   kicker: { fontSize: 9.5, letterSpacing: ".8px", color: "#7b818c", fontWeight: 700, marginBottom: 12 },
   hero: { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10, paddingBottom: 18 },

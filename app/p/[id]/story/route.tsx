@@ -103,8 +103,10 @@ export async function GET(_req: Request, ctx: RouteContext<"/p/[id]/story">) {
         {statusLabel}
       </div>
       {p.verified ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 30, fontWeight: 600, color: "#34D399" }}>
-          ✓ Verificado
+        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 30, fontWeight: 600, color: "#34D399" }}>
+          {/* drawn dot instead of a ✓ glyph — next/og's default font may lack it */}
+          <div style={{ width: 18, height: 18, borderRadius: 9, background: "#34D399", display: "flex" }} />
+          Verificado
         </div>
       ) : null}
     </div>

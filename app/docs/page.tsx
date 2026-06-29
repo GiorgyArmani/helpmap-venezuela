@@ -131,7 +131,7 @@ export default async function DocsPage({ searchParams }: SearchParams) {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  wrap: { minHeight: "100vh", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#f7f8f9", padding: 20, fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#16191f" },
+  wrap: { minHeight: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#f7f8f9", padding: 20, fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#16191f" },
   card: { width: "100%", maxWidth: 520, background: "#fff", border: "1px solid #ebecef", borderRadius: 18, padding: 24, boxShadow: "0 10px 34px rgba(16,20,28,.10)", marginTop: 24 },
   nav: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid #ebecef" },
   back: { fontSize: 13, fontWeight: 600, color: "#16191f", textDecoration: "none" },
@@ -151,5 +151,5 @@ const S: Record<string, React.CSSProperties> = {
   itemDesc: { fontSize: 13, lineHeight: 1.45, color: "#7b818c", margin: 0 },
   note: { fontSize: 13, lineHeight: 1.5, color: "#4b5159", margin: "18px 0 0" },
   mail: { color: "#15181d", fontWeight: 600 },
-  primary: { display: "inline-block", marginTop: 16, background: "#15181d", color: "#fff", textDecoration: "none", padding: "13px 18px", borderRadius: 12, fontSize: 14, fontWeight: 600 },
+  primary: { display: "block", textAlign: "center", marginTop: 16, background: "#15181d", color: "#fff", textDecoration: "none", padding: "13px 18px", borderRadius: 12, fontSize: 14, fontWeight: 600 },
 };
