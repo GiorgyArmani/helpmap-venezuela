@@ -15,7 +15,12 @@ body{margin:0;background:#fff}
 .mk-on .mkn{color:#fff}
 .mk-dim{opacity:.42}
 .topbar{position:absolute;left:0;right:0;top:0;z-index:600;padding:calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));display:flex;flex-direction:column;gap:9px;pointer-events:none}
-.hrow,.searchbar,.chips,.frow2{pointer-events:auto}
+.hrow,.searchbar,.chips,.frow2,.maint-banner{pointer-events:auto}
+/* Maintenance notice: full-width strip above the floating header. Flows inside the
+   topbar's flex column, so it pushes the rest down with no manual offset. Shown to
+   everyone while data is pulled down for re-verification (admin toggle, app_settings). */
+.maint-banner{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--danger);color:#fff;font-size:12.5px;font-weight:600;line-height:1.35;text-align:center;padding:9px 14px;border-radius:12px;box-shadow:0 4px 14px rgba(16,20,28,.18)}
+.maint-banner svg{width:17px;height:17px;flex:0 0 auto}
 .hrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 /* Brand shows a compact logo on mobile; the text label is desktop-only. */
 .brand{display:flex;align-items:center;gap:8px;background:#fff;padding:7px;border-radius:12px;box-shadow:0 3px 12px rgba(16,20,28,.12);border:1px solid var(--line);text-decoration:none;color:inherit;cursor:pointer}
@@ -144,6 +149,19 @@ body{margin:0;background:#fff}
 .upload-remove{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer}
 .note{display:flex;gap:9px;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:13px;font-size:11.5px;color:#454a53;line-height:1.45}
 .note svg{width:16px;height:16px;flex:0 0 auto;color:var(--mut);margin-top:1px}
+/* Admin maintenance toggle: turns the public maintenance banner on/off. */
+.maint-toggle{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:14px;background:#fff}
+.maint-toggle-on{border-color:var(--danger);background:color-mix(in oklch,var(--danger) 7%,#fff)}
+.maint-toggle-txt{flex:1;min-width:0}
+.maint-toggle-title{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--ink)}
+.maint-toggle-hint{font-size:11.5px;color:var(--mut);line-height:1.4;margin-top:3px}
+.maint-pill{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--soft2);color:var(--mut);text-transform:uppercase;letter-spacing:.3px}
+.maint-pill-on{background:var(--danger);color:#fff}
+.switch{flex:0 0 auto;width:46px;height:27px;border-radius:999px;border:none;background:#cfd2d7;position:relative;cursor:pointer;padding:0;transition:background .15s}
+.switch-on{background:var(--danger)}
+.switch:disabled{opacity:.6;cursor:default}
+.switch-knob{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(16,20,28,.3);transition:left .15s}
+.switch-on .switch-knob{left:22px}
 /* Tabs scroll horizontally so all of them stay reachable (admin has 5: Centros,
    Personas, Subir listas, Donaciones, Voluntarios) without wrapping or clipping. */
 .admtabs{display:flex;gap:8px;padding:13px 16px 4px;flex:0 0 auto;overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -213,6 +231,9 @@ body{margin:0;background:#fff}
   .zoomctl{right:24px}
   .overlay{left:12px;top:12px;bottom:12px;right:auto;width:430px;max-width:calc(100% - 24px);border-radius:18px;box-shadow:0 18px 54px rgba(16,20,28,.24);overflow:hidden}
   .toast{left:225px}
+  /* Desktop has no touch-scroll and the scrollbar is hidden, so a horizontal
+     overflow leaves the trailing tabs (Voluntarios…) unreachable. Wrap instead. */
+  .admtabs{flex-wrap:wrap;overflow-x:visible}
 }
 
 /* Wide desktop: a touch more breathing room for the centered search. */

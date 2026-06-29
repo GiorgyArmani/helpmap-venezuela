@@ -37,7 +37,7 @@ import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer" | "contact";
+type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer" | "contact" | "contribute";
 
 // External donation partners surfaced in the "Donar" panel.
 // Volunteer recruiting contact. ⚠️ Fill with the crew's real channel before
@@ -60,7 +60,7 @@ const VOLUNTEER_ROLES: { es: string; en: string }[] = [
   { es: "Con acceso a información veraz y de primera mano", en: "With access to truthful, first-hand information" },
 ];
 
-type AdminTab = "centros" | "personas" | "voluntarios" | "listas" | "donaciones";
+type AdminTab = "centros" | "personas" | "voluntarios" | "listas" | "donaciones" | "aportes";
 type EditType = null | "center" | "person" | "donation";
 
 const CACHE_KEY = "helpmap:data:v3";
@@ -285,6 +285,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [donations, setDonations] = useState<Donation[]>([]);
   const [openDon, setOpenDon] = useState<string | null>(null); // foldable donation cards (accordion)
   const [stale, setStale] = useState(false);
+  const [maintenance, setMaintenance] = useState(false); // site-wide maintenance banner (admin toggle, app_settings)
+  const [maintBusy, setMaintBusy] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [showHeat, setShowHeat] = useState(false); // damage heat overlay off by default (user toggles "Daños")
   const [damage, setDamage] = useState<DamageData>(SEED_DAMAGE); // USGS-fed, seed fallback
@@ -317,6 +319,19 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // Why the user is writing: drives the email subject + form copy. The contact form
   // is only reached from the volunteer / donations CTAs (no generic contact entry).
   const [contactKind, setContactKind] = useState<"volunteer" | "donation">("volunteer");
+
+  // Public "Aportar foto / info" on an existing record (→ contributions moderation
+  // queue, NOT the intake funnel — intake is for people not yet in the system).
+  const [cbPhoto, setCbPhoto] = useState<string | null>(null); // compressed JPEG (adults only)
+  const [cbPhotoBusy, setCbPhotoBusy] = useState(false);
+  const [cbDesc, setCbDesc] = useState("");
+  const [cbContact, setCbContact] = useState("");
+  const [cbBusy, setCbBusy] = useState(false);
+  const [cbDone, setCbDone] = useState(false); // shows the "thanks, under review" panel
+  // Staff review queue (admin/volunteer)
+  const [contribs, setContribs] = useState<
+    { id: string; patient_id: string; patient_name: string; foto_url: string | null; descripcion: string | null; contacto: string | null }[]
+  >([]);
 
   // Public intake form + offline queue
   const [rNom, setRNom] = useState("");
@@ -471,7 +486,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       }
       try {
         const supabase = getSupabase();
-        const [locRes, patRes, donRes] = await Promise.all([
+        const [locRes, patRes, donRes, setRes] = await Promise.all([
           supabase.from("locations").select("*").eq("active", true),
           // Reads the privacy-filtered VIEW, never the base table (CLAUDE.md §2).
           supabase
@@ -480,10 +495,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             .order("updated_at", { ascending: false })
             .limit(2000),
           supabase.from("donations").select("*").eq("active", true).order("sort", { ascending: true }),
+          // Maintenance flag — non-critical; tolerate the table not existing yet.
+          supabase.from("app_settings").select("maintenance").eq("id", 1).maybeSingle(),
         ]);
         if (cancelled) return;
         if (locRes.error) throw locRes.error;
         if (patRes.error) throw patRes.error;
+        // Maintenance banner: best-effort, never blocks the load.
+        if (!setRes.error && setRes.data) setMaintenance(!!setRes.data.maintenance);
         // Donations are non-critical: if the table/policies aren't there yet, don't
         // blow up the whole load — keep whatever we have (cache/seed).
         const dons = donRes.error ? null : ((donRes.data ?? []) as Donation[]);
@@ -720,6 +739,87 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
   const selP = patients.find((p) => p.id === selId) || null;
   const selLoc = selP ? locById[selP.location_id] : null;
+
+  // ---- Contribute photo/info to THIS record (public → moderation queue) -------
+  const openContribute = () => {
+    setCbPhoto(null);
+    setCbDesc("");
+    setCbContact("");
+    setCbDone(false);
+    setView("contribute");
+  };
+  const onPickContribPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (selP?.is_minor) return; // never a photo for a minor (CLAUDE.md §2)
+    setCbPhotoBusy(true);
+    try {
+      setCbPhoto(await compressImage(file));
+    } catch {
+      showToast(t.photoError);
+    } finally {
+      setCbPhotoBusy(false);
+    }
+  };
+  const submitContribution = async () => {
+    if (!selP) return;
+    const desc = cbDesc.trim();
+    const photo = selP.is_minor ? null : cbPhoto; // defensive: minors never carry a photo
+    if (!photo && !desc) {
+      showToast(t.contribReq);
+      return;
+    }
+    setCbBusy(true);
+    try {
+      let foto_url: string | null = null;
+      if (photo) {
+        const { uploadIntakePhoto } = await import("./uploadPhoto");
+        foto_url = await uploadIntakePhoto(photo);
+      }
+      const res = await fetch("/api/contributions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patient_id: selP.id, foto_url, descripcion: desc || null, contacto: cbContact.trim() || null }),
+      });
+      if (res.ok) {
+        setCbDone(true);
+      } else {
+        showToast(t.saveError);
+      }
+    } catch {
+      showToast(t.saveError);
+    } finally {
+      setCbBusy(false);
+    }
+  };
+  const loadContributions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/contributions");
+      if (!res.ok) return;
+      const j = await res.json();
+      setContribs(Array.isArray(j.contributions) ? j.contributions : []);
+    } catch {
+      /* offline / non-fatal */
+    }
+  }, []);
+  const reviewContribution = async (id: string, action: "approve" | "reject") => {
+    try {
+      const res = await fetch("/api/contributions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+      if (res.ok) {
+        showToast(action === "approve" ? t.contribApproved : t.contribRejected);
+        setContribs((c) => c.filter((x) => x.id !== id));
+      } else {
+        showToast(t.saveError);
+      }
+    } catch {
+      /* non-fatal */
+    }
+  };
 
   // Sharing: on phones/tablets use the native OS share sheet (lets them pick
   // WhatsApp/IG directly); on desktop show the in-app share menu instead — the
@@ -1126,6 +1226,30 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     showToast(t.deleted);
   };
 
+  // Flip the site-wide maintenance banner. Admin-only (UI-gated here, RLS-gated in
+  // db/app_settings.sql). Optimistic: revert the local flag if the write fails.
+  const toggleMaintenance = async () => {
+    if (maintBusy) return;
+    const next = !maintenance;
+    setMaintBusy(true);
+    setMaintenance(next);
+    const { data, error } = await getSupabase()
+      .from("app_settings")
+      .update({ maintenance: next, updated_at: new Date().toISOString() })
+      .eq("id", 1)
+      .select("maintenance");
+    setMaintBusy(false);
+    // RLS can silently block an update (0 rows, no error) — treat that as a failure too.
+    if (error || !data || data.length === 0) {
+      // Surface the real cause: missing table → run db/app_settings.sql; 0 rows → RLS/admin.
+      console.error("[maintenance] toggle failed:", error ?? "0 rows updated (table missing or not admin)");
+      setMaintenance(!next); // revert
+      showToast(t.saveError);
+      return;
+    }
+    showToast(next ? t.maintOn : t.maintOff);
+  };
+
   const editPerson = (p: PatientPublic) => {
     setEditType("person");
     setEditId(p.id);
@@ -1416,6 +1540,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       <div className="map" ref={containerRef}></div>
 
       <div className="topbar">
+        {maintenance && (
+          <div className="maint-banner" role="status">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.6 2.6-1.4-1.4 2.6-2.6Z" />
+            </svg>
+            <span>{t.maintBanner}</span>
+          </div>
+        )}
         <div className="hrow">
           <a
             className="brand"
@@ -1759,6 +1891,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 {ICON.share}
                 {t.share}
               </button>
+              <button className="btng" onClick={openContribute}>
+                {ICON.plus}
+                {t.contribCta}
+              </button>
               <button className="btng" onClick={seeOnMap}>
                 {ICON.pin}
                 {t.seeMap}
@@ -1790,6 +1926,93 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </a>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Contribute overlay (public → contributions moderation queue) ---- */}
+      {view === "contribute" && selP && (
+        <div className="overlay">
+          <div className="ovhead">
+            <button className="oicon" onClick={() => setView("detail")}>
+              {ICON.back}
+            </button>
+            <span className="ohtitle">{t.contribTitle}</span>
+          </div>
+          <div className="ovbody">
+            {cbDone ? (
+              <div className="contact-ack">
+                <div className="contact-ack-ico">{ICON.check}</div>
+                <h3 className="contact-ack-title">{t.contribAckTitle}</h3>
+                <p className="contact-ack-body">{t.contribAckBody}</p>
+                <button className="btnp" onClick={() => setView("detail")}>
+                  {t.contribAckClose}
+                </button>
+              </div>
+            ) : (
+              <div className="form">
+                <div className="fld">
+                  <span className="flabel">{t.contribFor}</span>
+                  <div className="aname">{selP.nombres + " " + selP.apellidos}</div>
+                  <span className="asub">{selP.location_name}</span>
+                </div>
+                <p className="donate-sub">{t.contribSub}</p>
+                <div className="fld">
+                  <span className="flabel">{t.contribDescLabel}</span>
+                  <textarea
+                    className="finput"
+                    rows={4}
+                    value={cbDesc}
+                    onChange={(e) => setCbDesc(e.target.value)}
+                    placeholder={t.contribDescPh}
+                  />
+                </div>
+                {selP.is_minor ? (
+                  <div className="note">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+                    </svg>
+                    {t.contribMinorNote}
+                  </div>
+                ) : (
+                  <div className="fld">
+                    <span className="flabel">{t.contribPhoto}</span>
+                    {cbPhoto ? (
+                      <div className="upload upload-has">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={cbPhoto} alt="" className="upload-thumb" />
+                        <button type="button" className="upload-remove" onClick={() => setCbPhoto(null)}>
+                          {t.removePhoto}
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="upload">
+                        <input type="file" accept="image/*" onChange={onPickContribPhoto} style={{ display: "none" }} disabled={cbPhotoBusy} />
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 16V4M8 8l4-4 4 4" />
+                          <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+                        </svg>
+                        {cbPhotoBusy ? t.photoBusy : t.f_photoHint}
+                      </label>
+                    )}
+                  </div>
+                )}
+                <div className="fld">
+                  <span className="flabel">{t.contribContact}</span>
+                  <input className="finput" value={cbContact} onChange={(e) => setCbContact(e.target.value)} placeholder="+58… / correo" />
+                </div>
+                <div className="note">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 11v5M12 8h.01" />
+                  </svg>
+                  {t.contribNote}
+                </div>
+                <button className="btnp" onClick={submitContribution} disabled={cbBusy}>
+                  {cbBusy ? t.contribSending : t.contribSend}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2310,6 +2533,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   >
                     {t.tabDonations}
                   </button>
+                  <button
+                    className={"atab " + (adminTab === "aportes" ? "atab-on" : "")}
+                    onClick={() => {
+                      setAdminTab("aportes");
+                      clearEdit();
+                      loadContributions();
+                    }}
+                  >
+                    {t.tabContribs}
+                  </button>
                   {isAdmin && (
                     <button
                       className={"atab " + (adminTab === "voluntarios" ? "atab-on" : "")}
@@ -2325,6 +2558,32 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </div>
               )}
               <div className="ovbody">
+                {/* Maintenance toggle — admin only, shown on every tab (high-impact,
+                    same gate as deletes). Flips the public site-wide banner. */}
+                {isAdmin && !editType && (
+                  <div className={"maint-toggle" + (maintenance ? " maint-toggle-on" : "")}>
+                    <div className="maint-toggle-txt">
+                      <div className="maint-toggle-title">
+                        {t.maintTitle}
+                        <span className={"maint-pill" + (maintenance ? " maint-pill-on" : "")}>
+                          {maintenance ? t.maintActive : t.maintInactive}
+                        </span>
+                      </div>
+                      <div className="maint-toggle-hint">{t.maintHint}</div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={maintenance}
+                      className={"switch" + (maintenance ? " switch-on" : "")}
+                      onClick={toggleMaintenance}
+                      disabled={maintBusy}
+                      aria-label={t.maintTitle}
+                    >
+                      <span className="switch-knob" />
+                    </button>
+                  </div>
+                )}
                 <div className="note" style={{ marginBottom: 14 }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="9" />
@@ -2387,6 +2646,40 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                               {ICON.trash}
                             </button>
                           )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {adminTab === "aportes" && !editType && (
+                  <div>
+                    <div className="note" style={{ marginBottom: 10 }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 11v5M12 8h.01" />
+                      </svg>
+                      {t.contribReviewNote}
+                    </div>
+                    {contribs.length === 0 && <div className="asub" style={{ padding: "8px 2px" }}>{t.contribNone}</div>}
+                    {contribs.map((c) => (
+                      <div className="arow" key={c.id}>
+                        {c.foto_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.foto_url} alt="" className="upload-thumb" style={{ width: 48, height: 48, marginRight: 10 }} />
+                        )}
+                        <div className="ai">
+                          <div className="aname">{c.patient_name}</div>
+                          {c.descripcion && <div className="asub">{c.descripcion}</div>}
+                          {c.contacto && <div className="asub mono">{c.contacto}</div>}
+                        </div>
+                        <div className="aacts">
+                          <button className="amini" title={t.contribApprove} onClick={() => reviewContribution(c.id, "approve")}>
+                            {ICON.check}
+                          </button>
+                          <button className="amini del" title={t.contribReject} onClick={() => reviewContribution(c.id, "reject")}>
+                            {ICON.trash}
+                          </button>
                         </div>
                       </div>
                     ))}

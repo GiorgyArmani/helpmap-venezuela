@@ -159,13 +159,21 @@ export interface Strings {
   f_donName: string; f_donDesc: string; f_donSocial: string; f_donUrl: string;
   f_donInfo: string; f_donInfoHint: string; donCopy: string; donData: string;
   donFollow: string; donNone: string;
+  contribCta: string; contribTitle: string; contribFor: string; contribSub: string;
+  contribDescLabel: string; contribDescPh: string; contribPhoto: string;
+  contribSend: string; contribSending: string; contribNote: string; contribMinorNote: string;
+  contribAckTitle: string; contribAckBody: string; contribAckClose: string; contribReq: string;
+  contribContact: string; tabContribs: string; contribApprove: string; contribReject: string;
+  contribApproved: string; contribRejected: string; contribNone: string; contribReviewNote: string;
+  maintBanner: string; maintTitle: string; maintHint: string;
+  maintActive: string; maintInactive: string; maintOn: string; maintOff: string;
 }
 
 export const T: Record<Lang, Strings> = {
   es: {
     appName: "HelpMap VE", tagline: "OSINT humanitario",
     search: "Buscar por nombre, apellido o cédula", all: "Todos", allStates: "Todos los estados", allCenters: "Todos los centros",
-    report: "Subir info", people: "personas", yrs: "años", noResults: "Sin resultados. Intenta con otro nombre o filtro.",
+    report: "Reportar", people: "personas", yrs: "años", noResults: "Sin resultados. Intenta con otro nombre o filtro.",
     female: "Femenino", male: "Masculino", ci: "Cédula", edad: "Edad", sexo: "Sexo", ubic: "Centro", type: "Tipo",
     municipality: "Municipio", state: "Estado", verified: "Verificado", verifiedYes: "Verificado", verifiedNo: "Sin verificar",
     updated: "Actualizado", share: "Compartir", seeMap: "Ver en el mapa", detailTitle: "Ficha de la persona",
@@ -304,11 +312,41 @@ export const T: Record<Lang, Strings> = {
     donData: "Datos para donar",
     donFollow: "Red social",
     donNone: "Aún no hay iniciativas. Agrega la primera.",
+    contribCta: "Aportar foto / info",
+    contribTitle: "Aportar información",
+    contribFor: "Sobre",
+    contribSub: "¿Conoces a esta persona? Ayúdanos a ponerle cara y confirmar sus datos. Tu aporte se envía al equipo para revisión antes de publicarse.",
+    contribDescLabel: "¿Qué sabes? (descripción)",
+    contribDescPh: "Ej.: es mi hermano, lo vi el martes en el área de emergencias…",
+    contribPhoto: "Foto de la persona",
+    contribSend: "Enviar aporte",
+    contribSending: "Enviando…",
+    contribNote: "Tu aporte NO se publica de inmediato. El equipo lo revisa y verifica antes de mostrarlo.",
+    contribMinorNote: "Por protección, no se aceptan fotos de menores de edad.",
+    contribAckTitle: "¡Gracias por tu aporte!",
+    contribAckBody: "Lo estamos revisando. Si se confirma, ayudará a reunir a esta persona con su familia.",
+    contribAckClose: "Cerrar",
+    contribReq: "Agrega una foto o una descripción.",
+    contribContact: "Tu contacto (opcional)",
+    tabContribs: "Aportes",
+    contribApprove: "Aprobar",
+    contribReject: "Rechazar",
+    contribApproved: "Aporte aprobado",
+    contribRejected: "Aporte rechazado",
+    contribNone: "No hay aportes pendientes.",
+    contribReviewNote: "Aportes del público a registros existentes. Al aprobar una foto se adjunta a la persona (solo se ve en público si el registro está verificado).",
+    maintBanner: "Sitio en mantenimiento: estamos re-verificando los datos. Algunos registros pueden no aparecer. Vuelve pronto.",
+    maintTitle: "Modo mantenimiento",
+    maintHint: "Muestra un aviso a todos los visitantes (los datos se están re-verificando y pueden estar incompletos).",
+    maintActive: "Activo",
+    maintInactive: "Inactivo",
+    maintOn: "Modo mantenimiento activado",
+    maintOff: "Modo mantenimiento desactivado",
   },
   en: {
     appName: "HelpMap VE", tagline: "Humanitarian OSINT",
     search: "Search by name, surname or ID", all: "All", allStates: "All states", allCenters: "All centers",
-    report: "Upload info", people: "people", yrs: "yrs", noResults: "No results. Try another name or filter.",
+    report: "Report", people: "people", yrs: "yrs", noResults: "No results. Try another name or filter.",
     female: "Female", male: "Male", ci: "ID (CI)", edad: "Age", sexo: "Sex", ubic: "Center", type: "Type",
     municipality: "Municipality", state: "State", verified: "Verified", verifiedYes: "Verified", verifiedNo: "Unverified",
     updated: "Updated", share: "Share", seeMap: "See on map", detailTitle: "Person record",
@@ -447,6 +485,36 @@ export const T: Record<Lang, Strings> = {
     donData: "How to donate",
     donFollow: "Social",
     donNone: "No initiatives yet. Add the first one.",
+    contribCta: "Contribute photo / info",
+    contribTitle: "Contribute information",
+    contribFor: "About",
+    contribSub: "Do you know this person? Help us put a face to the record and confirm their details. Your contribution is sent to the team for review before it appears.",
+    contribDescLabel: "What do you know? (description)",
+    contribDescPh: "E.g.: he's my brother, I saw him Tuesday in the ER…",
+    contribPhoto: "Photo of the person",
+    contribSend: "Send contribution",
+    contribSending: "Sending…",
+    contribNote: "Your contribution is NOT published immediately. The team reviews and verifies it before showing it.",
+    contribMinorNote: "For their protection, photos of minors are not accepted.",
+    contribAckTitle: "Thank you for your contribution!",
+    contribAckBody: "We're reviewing it. If confirmed, it will help reunite this person with their family.",
+    contribAckClose: "Close",
+    contribReq: "Add a photo or a description.",
+    contribContact: "Your contact (optional)",
+    tabContribs: "Contributions",
+    contribApprove: "Approve",
+    contribReject: "Reject",
+    contribApproved: "Contribution approved",
+    contribRejected: "Contribution rejected",
+    contribNone: "No pending contributions.",
+    contribReviewNote: "Public contributions to existing records. Approving a photo attaches it to the person (it only shows publicly if the record is verified).",
+    maintBanner: "Site under maintenance: we're re-verifying the data. Some records may not appear. Check back soon.",
+    maintTitle: "Maintenance mode",
+    maintHint: "Shows a notice to all visitors (data is being re-verified and may be incomplete).",
+    maintActive: "On",
+    maintInactive: "Off",
+    maintOn: "Maintenance mode enabled",
+    maintOff: "Maintenance mode disabled",
   },
 };
 
