@@ -66,6 +66,48 @@ export interface PatientPublic {
   updated_at: string;
 }
 
+// `rescatados_public` view — a rescued person not yet transferred to a center, so no
+// location/estatus yet. Same privacy filtering as patients_public (no procedencia/etc.,
+// ci_display "MENOR" for minors, foto_url null unless verified adult). Promoted rows
+// (already turned into patients) are excluded by the view.
+export interface RescatadoPublic {
+  id: string;
+  apellidos: string;
+  nombres: string;
+  ci_display: string;
+  is_minor: boolean;
+  edad: number | null;
+  sexo: Sexo | null;
+  foto_url: string | null;
+  verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// `rescatados` BASE table — what staff read/write in the admin panel (full fields,
+// incl. the admin-only ones the public view strips). Never expose procedencia/contacto/
+// rescue_site/notas to the public app.
+export interface Rescatado {
+  id: string;
+  apellidos: string;
+  nombres: string;
+  ci: string | null;
+  is_minor: boolean;
+  edad: number | null;
+  sexo: Sexo | null;
+  foto_url: string | null;
+  procedencia: string | null;
+  contacto: string | null;
+  rescue_site: string | null;
+  notas: string | null;
+  verified: boolean;
+  promoted: boolean;
+  patient_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const STATE_LABEL: Record<VzlaState, string> = {
   distrito_capital: "Distrito Capital",
   la_guaira: "La Guaira",
@@ -167,6 +209,12 @@ export interface Strings {
   contribApproved: string; contribRejected: string; contribNone: string; contribReviewNote: string;
   maintBanner: string; maintTitle: string; maintHint: string;
   maintActive: string; maintInactive: string; maintOn: string; maintOff: string;
+  tabRescued: string; rescuedListTitle: string; rescuedListSub: string; rescuedNone: string;
+  rescuedStatus: string; rescuedOpen: string; addRescued: string; rescuedReviewNote: string;
+  rescuedFieldNote: string; savedRescued: string; rescuedDeleted: string; rescuedReqName: string;
+  rescuedPublicNote: string; promote: string; promoteTitle: string; promoteHint: string; promoted: string;
+  f_rescueSite: string; f_rescueSiteHint: string; f_notas: string; f_notasHint: string;
+  admSearchPh: string; admSearchNone: string;
 }
 
 export const T: Record<Lang, Strings> = {
@@ -342,6 +390,29 @@ export const T: Record<Lang, Strings> = {
     maintInactive: "Inactivo",
     maintOn: "Modo mantenimiento activado",
     maintOff: "Modo mantenimiento desactivado",
+    tabRescued: "Rescatados",
+    rescuedListTitle: "Personas rescatadas",
+    rescuedListSub: "Rescatadas en campo, aún sin trasladar a un centro. Información preliminar de equipos en sitio.",
+    rescuedNone: "Aún no hay personas rescatadas reportadas.",
+    rescuedStatus: "Rescatado",
+    rescuedOpen: "Rescatados",
+    addRescued: "Reportar rescatado",
+    rescuedReviewNote: "Personas rescatadas en campo que aún no han sido trasladadas a un centro. Al agregarles ubicación y estatus clínico, pasan a ser pacientes en el mapa.",
+    rescuedFieldNote: "Registra a quien se ha rescatado con los datos que tengas. Aparece en la lista pública de rescatados (sin foto hasta verificar). No va al mapa hasta asignarle un centro.",
+    savedRescued: "Rescatado guardado",
+    rescuedDeleted: "Rescatado eliminado",
+    rescuedReqName: "Agrega al menos un nombre o apellido.",
+    rescuedPublicNote: "Público: apellidos, nombres, edad, sexo y cédula (adultos). Nunca procedencia, contacto ni señas.",
+    promote: "Trasladar a un centro",
+    promoteTitle: "Trasladar a paciente",
+    promoteHint: "Asigna el centro y el estatus clínico. El registro pasa a ser paciente y aparece en el mapa.",
+    promoted: "Trasladado a paciente",
+    f_rescueSite: "¿Dónde fue rescatado?",
+    f_rescueSiteHint: "Referencia del sitio o derrumbe (uso interno, no se muestra en público).",
+    f_notas: "Señas / condición",
+    f_notasHint: "Descripción para identificar (uso interno, no se muestra en público).",
+    admSearchPh: "Buscar en esta sección…",
+    admSearchNone: "Sin coincidencias.",
   },
   en: {
     appName: "HelpMap VE", tagline: "Humanitarian OSINT",
@@ -515,6 +586,29 @@ export const T: Record<Lang, Strings> = {
     maintInactive: "Off",
     maintOn: "Maintenance mode enabled",
     maintOff: "Maintenance mode disabled",
+    tabRescued: "Rescued",
+    rescuedListTitle: "Rescued people",
+    rescuedListSub: "Rescued in the field, not yet transferred to a center. Preliminary info from on-site teams.",
+    rescuedNone: "No rescued people reported yet.",
+    rescuedStatus: "Rescued",
+    rescuedOpen: "Rescued",
+    addRescued: "Report rescued person",
+    rescuedReviewNote: "People rescued in the field, not yet transferred to a center. Adding a location and clinical status turns them into patients on the map.",
+    rescuedFieldNote: "Log who has been rescued with whatever data you have. It appears in the public rescued list (no photo until verified). It does not hit the map until a center is assigned.",
+    savedRescued: "Rescued person saved",
+    rescuedDeleted: "Rescued person deleted",
+    rescuedReqName: "Add at least a first name or surname.",
+    rescuedPublicNote: "Public: surname, first names, age, sex and ID (adults). Never home origin, contact or notes.",
+    promote: "Transfer to a center",
+    promoteTitle: "Transfer to patient",
+    promoteHint: "Assign the center and clinical status. The record becomes a patient and shows on the map.",
+    promoted: "Transferred to patient",
+    f_rescueSite: "Where were they rescued?",
+    f_rescueSiteHint: "Site or collapse reference (internal use, not shown publicly).",
+    f_notas: "Notes / condition",
+    f_notasHint: "Description to help identify (internal use, not shown publicly).",
+    admSearchPh: "Search in this section…",
+    admSearchNone: "No matches.",
   },
 };
 
@@ -528,6 +622,14 @@ export function protectMinor(p: PatientPublic): PatientPublic {
   if (!minor) return p;
   if (p.foto_url === null && p.ci_display === "MENOR" && p.is_minor) return p; // already clean
   return { ...p, is_minor: true, ci_display: "MENOR", foto_url: null };
+}
+
+// Same defense-in-depth for rescatados (no location/estatus, same privacy rules).
+export function protectMinorRescatado(r: RescatadoPublic): RescatadoPublic {
+  const minor = r.is_minor || (r.edad != null && r.edad < 18);
+  if (!minor) return r;
+  if (r.foto_url === null && r.ci_display === "MENOR" && r.is_minor) return r; // already clean
+  return { ...r, is_minor: true, ci_display: "MENOR", foto_url: null };
 }
 
 const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");

@@ -9,18 +9,21 @@ import {
   TYPE_META,
   norm,
   protectMinor,
+  protectMinorRescatado,
   type Donation,
   type Estatus,
   type Lang,
   type Location,
   type LocationType,
   type PatientPublic,
+  type Rescatado,
+  type RescatadoPublic,
   type Sexo,
   type VzlaState,
 } from "./data";
 import { createClient } from "@/utils/supabase/client";
 import { enqueue, flushQueue, queueCount, type IntakeSubmission } from "./intakeQueue";
-import { compressImage } from "./uploadPhoto";
+import { compressImage, LIST_OPTS } from "./uploadPhoto";
 import {
   copyText,
   nativeShare,
@@ -37,7 +40,7 @@ import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer" | "contact" | "contribute";
+type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer" | "contact" | "contribute" | "rescued";
 
 // External donation partners surfaced in the "Donar" panel.
 // Volunteer recruiting contact. ⚠️ Fill with the crew's real channel before
@@ -60,10 +63,10 @@ const VOLUNTEER_ROLES: { es: string; en: string }[] = [
   { es: "Con acceso a información veraz y de primera mano", en: "With access to truthful, first-hand information" },
 ];
 
-type AdminTab = "centros" | "personas" | "voluntarios" | "listas" | "donaciones" | "aportes";
-type EditType = null | "center" | "person" | "donation";
+type AdminTab = "centros" | "personas" | "voluntarios" | "listas" | "donaciones" | "rescatados";
+type EditType = null | "center" | "person" | "donation" | "rescatado" | "promote";
 
-const CACHE_KEY = "helpmap:data:v3";
+const CACHE_KEY = "helpmap:data:v4";
 // Bump the version when tour content changes so returning users see it once more.
 const TOUR_KEY = "helpmap:tour:v2";
 
@@ -83,12 +86,18 @@ interface Draft {
   sexo?: Sexo;
   location_id?: string;
   estatus?: Estatus;
+  verified?: boolean;
   // donation
   don_name?: string;
   don_desc?: string;
   don_social?: string;
   don_url?: string;
   don_info?: string;
+  // rescatado (field rescued report) — admin-only free-text + explicit minor toggle
+  is_minor?: boolean;
+  contacto?: string;
+  rescue_site?: string;
+  notas?: string;
 }
 
 interface AuthUser {
@@ -101,17 +110,21 @@ export interface HelpMapProps {
   showReport?: boolean;
 }
 
-const initials = (p: PatientPublic) =>
+// Structural type shared by patients and rescatados — both carry these fields and the
+// same minor-photo rules, so Avatar/initials work for either.
+type PersonLike = { nombres: string; apellidos: string; foto_url: string | null; is_minor: boolean };
+
+const initials = (p: PersonLike) =>
   ((p.nombres[0] || "") + (p.apellidos[0] || "")).toUpperCase() || "··";
 
-function Avatar({ p, cls }: { p: PatientPublic; cls: string }) {
+function Avatar({ p, cls }: { p: PersonLike; cls: string }) {
   // Never render a photo for a minor, even if a foto_url somehow arrives (the
   // data is already stripped by protectMinor; this is the last line of defense).
   if (p.foto_url && !p.is_minor) {
     return (
       <div className={cls}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={p.foto_url} alt="" loading="lazy" />
+        <img src={p.foto_url} alt="" loading="lazy" decoding="async" />
       </div>
     );
   }
@@ -172,6 +185,12 @@ const ICON = {
   wifiOff: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 1l22 22M16.7 11.3A6 6 0 0 0 12 9M5 12.5a10 10 0 0 1 4-2.3M8.5 16.4a4 4 0 0 1 5 0M12 20h.01" />
+    </svg>
+  ),
+  rescue: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18M3 12h18M7.5 7.5l9 9M16.5 7.5l-9 9" />
     </svg>
   ),
   wa: (
@@ -271,6 +290,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [adminTab, setAdminTab] = useState<AdminTab>("centros");
+  const [admQ, setAdmQ] = useState(""); // in-panel search filter for the list tabs
   const [editType, setEditType] = useState<EditType>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -283,6 +303,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [locations, setLocations] = useState<Location[]>([]);
   const [patients, setPatients] = useState<PatientPublic[]>([]);
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [rescatados, setRescatados] = useState<RescatadoPublic[]>([]); // rescued, not yet transferred (no map pin)
+  const [rescAdmin, setRescAdmin] = useState<Rescatado[]>([]); // staff-only full base rows for the admin tab
   const [openDon, setOpenDon] = useState<string | null>(null); // foldable donation cards (accordion)
   const [stale, setStale] = useState(false);
   const [maintenance, setMaintenance] = useState(false); // site-wide maintenance banner (admin toggle, app_settings)
@@ -471,6 +493,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             locations?: Location[];
             patients?: PatientPublic[];
             donations?: Donation[];
+            rescatados?: RescatadoPublic[];
           };
           if (Array.isArray(c.locations)) {
             setLocations(c.locations);
@@ -480,13 +503,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           // must never reintroduce a minor photo/CI (CLAUDE.md §2).
           if (Array.isArray(c.patients)) setPatients(c.patients.map(protectMinor));
           if (Array.isArray(c.donations)) setDonations(c.donations);
+          if (Array.isArray(c.rescatados)) setRescatados(c.rescatados.map(protectMinorRescatado));
         }
       } catch {
         /* ignore */
       }
       try {
         const supabase = getSupabase();
-        const [locRes, patRes, donRes, setRes] = await Promise.all([
+        const [locRes, patRes, donRes, setRes, rescRes] = await Promise.all([
           supabase.from("locations").select("*").eq("active", true),
           // Reads the privacy-filtered VIEW, never the base table (CLAUDE.md §2).
           supabase
@@ -497,6 +521,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           supabase.from("donations").select("*").eq("active", true).order("sort", { ascending: true }),
           // Maintenance flag — non-critical; tolerate the table not existing yet.
           supabase.from("app_settings").select("maintenance").eq("id", 1).maybeSingle(),
+          // Rescued (not-yet-transferred) people — privacy-filtered VIEW, non-critical.
+          supabase.from("rescatados_public").select("*").order("created_at", { ascending: false }).limit(2000),
         ]);
         if (cancelled) return;
         if (locRes.error) throw locRes.error;
@@ -506,6 +532,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         // Donations are non-critical: if the table/policies aren't there yet, don't
         // blow up the whole load — keep whatever we have (cache/seed).
         const dons = donRes.error ? null : ((donRes.data ?? []) as Donation[]);
+        // Rescatados are non-critical too (table may not exist yet). Minor-protected.
+        const resc = rescRes.error ? null : ((rescRes.data ?? []) as RescatadoPublic[]).map(protectMinorRescatado);
         const locs = (locRes.data ?? []) as Location[];
         // Defense in depth: enforce minor protection on every record from the
         // view before it touches state or the cache (CLAUDE.md §2).
@@ -513,9 +541,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         setLocations(locs);
         setPatients(pats);
         if (dons) setDonations(dons);
+        if (resc) setRescatados(resc);
         setStale(false);
         try {
-          const cached = JSON.stringify({ locations: locs, patients: pats, donations: dons ?? donations });
+          const cached = JSON.stringify({ locations: locs, patients: pats, donations: dons ?? donations, rescatados: resc ?? rescatados });
           localStorage.setItem(CACHE_KEY, cached);
         } catch {
           /* storage full — non-fatal */
@@ -803,6 +832,20 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       /* offline / non-fatal */
     }
   }, []);
+  // Staff-only: load the FULL rescatados base rows (admin fields included) for the
+  // admin tab. RLS gates this to is_staff(); anon never reaches the base table.
+  const loadRescAdmin = useCallback(async () => {
+    try {
+      const { data, error } = await getSupabase()
+        .from("rescatados")
+        .select("*")
+        .eq("promoted", false)
+        .order("created_at", { ascending: false });
+      if (!error && data) setRescAdmin(data as Rescatado[]);
+    } catch {
+      /* offline / non-fatal */
+    }
+  }, []);
   const reviewContribution = async (id: string, action: "approve" | "reject") => {
     try {
       const res = await fetch("/api/contributions", {
@@ -989,6 +1032,12 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setGeoQuery("");
     setGeoResults([]);
   };
+
+  // Clear the in-panel search when switching tabs (but keep it across edit/cancel
+  // within a tab, so staff can keep iterating over the same filtered list).
+  useEffect(() => {
+    setAdmQ("");
+  }, [adminTab]);
 
   const editCenter = (l: Location) => {
     setEditType("center");
@@ -1261,6 +1310,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       sexo: p.sexo ?? "F",
       location_id: p.location_id,
       estatus: p.estatus,
+      verified: p.verified,
     });
   };
   const newPerson = () => {
@@ -1299,6 +1349,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       sexo: (d.sexo as Sexo) || null,
       location_id: loc.location_id,
       estatus: (d.estatus as Estatus) || "INGRESADO",
+      // The publish gate (§8). UI-gated to admins (the toggle is hidden for volunteers),
+      // so a volunteer save preserves whatever value was loaded into the draft.
+      verified: !!d.verified,
     };
 
     const supabase = getSupabase();
@@ -1340,7 +1393,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       lng: loc.lng,
       estatus: baseRow.estatus,
       foto_url: isMinor ? null : prev?.foto_url ?? null,
-      verified: prev?.verified ?? false,
+      verified: baseRow.verified,
       updated_at: new Date().toISOString(),
     };
     setPatients((ps) => (editId ? ps.map((p) => (p.id === obj.id ? obj : p)) : [obj, ...ps]));
@@ -1356,6 +1409,180 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setPatients((ps) => ps.filter((p) => p.id !== id));
     clearEdit();
     showToast(t.deleted);
+  };
+
+  // ---- Rescatados (field rescued reports) --------------------------------
+  // Derive the privacy-filtered public shape from a base row (mirrors the
+  // rescatados_public view: ci_display, photo only for verified adults).
+  const toRescPublic = (r: Rescatado): RescatadoPublic => ({
+    id: r.id,
+    apellidos: r.apellidos,
+    nombres: r.nombres,
+    ci_display: r.is_minor ? "MENOR" : r.ci || "—",
+    is_minor: r.is_minor,
+    edad: r.edad,
+    sexo: r.sexo,
+    foto_url: r.verified && !r.is_minor ? r.foto_url : null,
+    verified: r.verified,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  });
+
+  const newRescatado = () => {
+    setEditType("rescatado");
+    setEditId(null);
+    setDraft({ is_minor: false, verified: false });
+  };
+  const editRescatado = (r: Rescatado) => {
+    setEditType("rescatado");
+    setEditId(r.id);
+    setDraft({
+      apellidos: r.apellidos,
+      nombres: r.nombres,
+      ci: r.ci || "",
+      edad: r.edad != null ? String(r.edad) : "",
+      sexo: r.sexo || undefined,
+      is_minor: r.is_minor,
+      contacto: r.contacto || "",
+      rescue_site: r.rescue_site || "",
+      notas: r.notas || "",
+      verified: r.verified,
+    });
+  };
+  const saveRescatado = async () => {
+    const d = draft || {};
+    const ape = (d.apellidos || "").trim();
+    const nom = (d.nombres || "").trim();
+    if (!ape && !nom) {
+      showToast(t.rescuedReqName);
+      return;
+    }
+    const edad = d.edad ? parseInt(d.edad) : null;
+    const isMinor = !!d.is_minor || (edad != null && edad < 18);
+    const clean = (s?: string) => {
+      const v = (s || "").trim();
+      return v ? v : null;
+    };
+    // Minor: never a CI (the DB trigger also enforces this — defense in depth, §2).
+    const row = {
+      apellidos: ape,
+      nombres: nom,
+      ci: isMinor ? null : d.ci?.trim() || null,
+      is_minor: isMinor,
+      edad,
+      sexo: (d.sexo as Sexo) || null,
+      contacto: clean(d.contacto),
+      rescue_site: clean(d.rescue_site),
+      notas: clean(d.notas),
+      verified: !!d.verified,
+      updated_at: new Date().toISOString(),
+    };
+    const supabase = getSupabase();
+    const res = editId
+      ? await supabase.from("rescatados").update(row).eq("id", editId).select("*").single()
+      : await supabase.from("rescatados").insert(row).select("*").single();
+    if (res.error || !res.data) {
+      showToast(t.saveError);
+      return;
+    }
+    const saved = res.data as Rescatado;
+    setRescAdmin((rs) => (editId ? rs.map((x) => (x.id === saved.id ? saved : x)) : [saved, ...rs]));
+    const pub = toRescPublic(saved);
+    setRescatados((rs) => (editId ? rs.map((x) => (x.id === pub.id ? pub : x)) : [pub, ...rs]));
+    clearEdit();
+    showToast(t.savedRescued);
+  };
+  const deleteRescatado = async (id: string) => {
+    const { error } = await getSupabase().from("rescatados").delete().eq("id", id);
+    if (error) {
+      showToast(t.saveError);
+      return;
+    }
+    setRescAdmin((rs) => rs.filter((x) => x.id !== id));
+    setRescatados((rs) => rs.filter((x) => x.id !== id));
+    clearEdit();
+    showToast(t.rescuedDeleted);
+  };
+  // Promote a rescatado → a real patient (now we know the center + clinical status).
+  // Pre-fills the transfer form from the rescatado's known data.
+  const startPromote = (r: Rescatado) => {
+    setEditType("promote");
+    setEditId(r.id);
+    setDraft({
+      apellidos: r.apellidos,
+      nombres: r.nombres,
+      ci: r.ci || "",
+      edad: r.edad != null ? String(r.edad) : "",
+      sexo: r.sexo || undefined,
+      is_minor: r.is_minor,
+      location_id: locations[0]?.location_id,
+      estatus: "INGRESADO",
+      verified: r.verified,
+    });
+  };
+  const savePromotion = async () => {
+    const d = draft || {};
+    const loc = locById[d.location_id || ""] || locations[0];
+    if (!loc) {
+      showToast(t.reqNameLoc);
+      return;
+    }
+    const src = editId ? rescAdmin.find((x) => x.id === editId) : undefined;
+    const edad = d.edad ? parseInt(d.edad) : src?.edad ?? null;
+    const isMinor = !!d.is_minor || (edad != null && edad < 18);
+    const ci = isMinor ? null : d.ci?.trim() || null;
+    const baseRow = {
+      apellidos: d.apellidos || "",
+      nombres: d.nombres || "",
+      ci,
+      is_minor: isMinor,
+      edad,
+      sexo: (d.sexo as Sexo) || null,
+      location_id: loc.location_id,
+      estatus: (d.estatus as Estatus) || "INGRESADO",
+      verified: !!d.verified,
+    };
+    const supabase = getSupabase();
+    const person_key = ci || "resc_" + (editId ?? Date.now());
+    const { data, error } = await supabase.from("patients").insert({ ...baseRow, person_key }).select("id").single();
+    if (error || !data) {
+      showToast(t.saveError);
+      return;
+    }
+    const newId = data.id as string;
+    // Mark the rescatado promoted so it leaves the rescued lists (carries the link).
+    if (editId) {
+      await supabase
+        .from("rescatados")
+        .update({ promoted: true, patient_id: newId, updated_at: new Date().toISOString() })
+        .eq("id", editId);
+    }
+    setRescatados((rs) => rs.filter((x) => x.id !== editId));
+    setRescAdmin((rs) => rs.filter((x) => x.id !== editId));
+    const obj: PatientPublic = {
+      id: newId,
+      apellidos: baseRow.apellidos,
+      nombres: baseRow.nombres,
+      ci_display: isMinor ? "MENOR" : ci || "—",
+      is_minor: isMinor,
+      edad,
+      sexo: baseRow.sexo,
+      location_id: loc.location_id,
+      location_name: loc.canonical_name,
+      location_type: loc.type,
+      municipality: loc.municipality,
+      state: loc.state,
+      lat: loc.lat,
+      lng: loc.lng,
+      estatus: baseRow.estatus,
+      // Carry the photo only if it was verified+adult; otherwise the view nulls it anyway.
+      foto_url: isMinor ? null : src?.verified ? src.foto_url : null,
+      verified: baseRow.verified,
+      updated_at: new Date().toISOString(),
+    };
+    setPatients((ps) => [obj, ...ps]);
+    clearEdit();
+    showToast(t.promoted);
   };
 
   // ---- Auth handlers -----------------------------------------------------
@@ -1444,7 +1671,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     if (!file) return;
     setListBusy(true);
     try {
-      const b64 = await compressImage(file); // data URL (compressed JPEG)
+      const b64 = await compressImage(file, LIST_OPTS); // higher-res for OCR legibility
       const res = await fetch("/api/lists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1520,6 +1747,29 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const statusOpts: { v: Estatus; label: string }[] = ESTATUS_ORDER.map((k) => ({ v: k, label: SM[k][lang] }));
   const canDelete = !!(editType && editId) && isAdmin; // volunteers can't delete
 
+  // In-panel search (admin list tabs). admHit tests any record's searchable text.
+  const admNorm = norm(admQ.trim());
+  const admHit = (s: string) => !admNorm || norm(s).includes(admNorm);
+  const admSearchBar = (
+    <div className="admsearch">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3-3" />
+      </svg>
+      <input
+        className="admsearch-i"
+        placeholder={t.admSearchPh}
+        value={admQ}
+        onChange={(e) => setAdmQ(e.target.value)}
+      />
+      {admQ && (
+        <button type="button" className="admsearch-x" onClick={() => setAdmQ("")} aria-label="✕">
+          ✕
+        </button>
+      )}
+    </div>
+  );
+
   const chips: { key: "all" | Estatus; label: string; dotCls: string }[] = [
     { key: "all", label: t.all, dotCls: "" },
     { key: "INGRESADO", label: SM.INGRESADO[lang], dotCls: "cdot-adm" },
@@ -1575,6 +1825,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   setView("admin");
                   setAdminTab("centros"); // staff (admin + volunteer) can now manage centers
                   clearEdit();
+                  loadContributions(); // pending aportes drive the count badges + in-card review
                 }}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1774,6 +2025,17 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             <span className="trust-txt">{t.trustLine}</span>
             <span className="trust-cta">{t.trustCta}</span>
           </button>
+          {/* Rescued-people network: people pulled out alive but not yet at a center,
+              so they have no map pin. Surfaced here as a list entry (CLAUDE.md §14). */}
+          {rescatados.length > 0 && (
+            <button className="rescbar" onClick={() => setView("rescued")}>
+              <span className="resc-ic">{ICON.rescue}</span>
+              <span className="resc-txt">
+                <b>{rescatados.length}</b> {t.rescuedOpen}
+              </span>
+              <span className="resc-cta">{ICON.chevR}</span>
+            </button>
+          )}
           {list.map((p) => (
             <button key={p.id} className={"card " + SM[p.estatus].cls} onClick={() => openDetail(p)}>
               <Avatar p={p} cls="av" />
@@ -2034,7 +2296,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   <div className="ogimg">
                     {selP.foto_url && !selP.is_minor ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={selP.foto_url} alt="" />
+                      <img src={selP.foto_url} alt="" loading="lazy" decoding="async" />
                     ) : (
                       initials(selP)
                     )}
@@ -2434,6 +2696,51 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         </div>
       )}
 
+      {/* ---- Rescued people (public list) — field info network, no map pins ---- */}
+      {view === "rescued" && (
+        <div className="overlay">
+          <div className="ovhead">
+            <button className="oicon" onClick={() => setView(null)}>
+              {ICON.back}
+            </button>
+            <span className="ohtitle">{t.rescuedListTitle}</span>
+          </div>
+          <div className="ovbody">
+            <div className="note" style={{ marginBottom: 14 }}>
+              <span className="resc-ic">{ICON.rescue}</span>
+              {t.rescuedListSub}
+            </div>
+            {rescatados.length === 0 && <div className="empty">{t.rescuedNone}</div>}
+            {rescatados.map((r) => (
+              <div className={"card st-resc"} key={r.id}>
+                <Avatar p={r} cls="av" />
+                <div className="cmid">
+                  <span className="cname">
+                    {(r.nombres + " " + r.apellidos).trim() || "—"}
+                    {r.verified && <span className="vchk"> {ICON.check}</span>}
+                  </span>
+                  <span className="cmeta">
+                    {[
+                      r.edad != null ? r.edad + " " + t.yrs : null,
+                      r.sexo === "M" ? t.male : r.sexo === "F" ? t.female : null,
+                      !r.is_minor && r.ci_display && r.ci_display !== "—" ? r.ci_display : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+                <div className="cend">
+                  <span className="badge resc-badge">
+                    <span className="dot"></span>
+                    {t.rescuedStatus}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ---- Admin overlay (Supabase Auth protected) ---- */}
       {view === "admin" && (
         <div className="overlay">
@@ -2525,6 +2832,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     {t.tabLists}
                   </button>
                   <button
+                    className={"atab " + (adminTab === "rescatados" ? "atab-on" : "")}
+                    onClick={() => {
+                      setAdminTab("rescatados");
+                      clearEdit();
+                      loadRescAdmin();
+                    }}
+                  >
+                    {t.tabRescued}
+                  </button>
+                  <button
                     className={"atab " + (adminTab === "donaciones" ? "atab-on" : "")}
                     onClick={() => {
                       setAdminTab("donaciones");
@@ -2532,16 +2849,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     }}
                   >
                     {t.tabDonations}
-                  </button>
-                  <button
-                    className={"atab " + (adminTab === "aportes" ? "atab-on" : "")}
-                    onClick={() => {
-                      setAdminTab("aportes");
-                      clearEdit();
-                      loadContributions();
-                    }}
-                  >
-                    {t.tabContribs}
                   </button>
                   {isAdmin && (
                     <button
@@ -2598,7 +2905,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                       {ICON.plus}
                       {t.addCenter}
                     </button>
-                    {locations.map((l) => (
+                    {admSearchBar}
+                    {(() => {
+                      const rows = locations.filter((l) =>
+                        admHit(l.canonical_name + " " + (l.municipality ?? "") + " " + STATE_LABEL[l.state] + " " + TYPE_META[l.type][lang]),
+                      );
+                      if (rows.length === 0)
+                        return <div className="asub" style={{ padding: "8px 2px" }}>{admQ ? t.admSearchNone : t.noResults}</div>;
+                      return rows.map((l) => (
                       <div className="arow" key={l.location_id}>
                         <div className="ai">
                           <div className="aname">{l.canonical_name}</div>
@@ -2620,7 +2934,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                           )}
                         </div>
                       </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 )}
 
@@ -2630,8 +2945,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                       {ICON.plus}
                       {t.addDonation}
                     </button>
+                    {admSearchBar}
                     {donations.length === 0 && <div className="asub" style={{ padding: "8px 2px" }}>{t.donNone}</div>}
-                    {donations.map((d) => (
+                    {donations
+                      .filter((d) => admHit(d.name + " " + (d.description ?? "")))
+                      .map((d) => (
                       <div className="arow" key={d.id}>
                         <div className="ai">
                           <div className="aname">{d.name}</div>
@@ -2652,59 +2970,87 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   </div>
                 )}
 
-                {adminTab === "aportes" && !editType && (
-                  <div>
-                    <div className="note" style={{ marginBottom: 10 }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M12 11v5M12 8h.01" />
-                      </svg>
-                      {t.contribReviewNote}
-                    </div>
-                    {contribs.length === 0 && <div className="asub" style={{ padding: "8px 2px" }}>{t.contribNone}</div>}
-                    {contribs.map((c) => (
-                      <div className="arow" key={c.id}>
-                        {c.foto_url && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={c.foto_url} alt="" className="upload-thumb" style={{ width: 48, height: 48, marginRight: 10 }} />
-                        )}
-                        <div className="ai">
-                          <div className="aname">{c.patient_name}</div>
-                          {c.descripcion && <div className="asub">{c.descripcion}</div>}
-                          {c.contacto && <div className="asub mono">{c.contacto}</div>}
-                        </div>
-                        <div className="aacts">
-                          <button className="amini" title={t.contribApprove} onClick={() => reviewContribution(c.id, "approve")}>
-                            {ICON.check}
-                          </button>
-                          <button className="amini del" title={t.contribReject} onClick={() => reviewContribution(c.id, "reject")}>
-                            {ICON.trash}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
                 {adminTab === "personas" && !editType && (
                   <div>
                     <button className="addbtn" onClick={newPerson}>
                       {ICON.plus}
                       {t.addPerson}
                     </button>
-                    {patients.map((p) => (
+                    {admSearchBar}
+                    {patients.filter((p) => admHit(p.nombres + " " + p.apellidos + " " + p.ci_display + " " + p.location_name)).length === 0 && (
+                      <div className="asub" style={{ padding: "8px 2px" }}>{admQ ? t.admSearchNone : t.noResults}</div>
+                    )}
+                    {patients
+                      .filter((p) => admHit(p.nombres + " " + p.apellidos + " " + p.ci_display + " " + p.location_name))
+                      .map((p) => {
+                      const nAportes = contribs.filter((c) => c.patient_id === p.id).length;
+                      return (
                       <div className={"arow " + SM[p.estatus].cls} key={p.id}>
                         <div className="ai">
                           <div className="aname">{p.nombres + " " + p.apellidos}</div>
                           <div className="asub">{p.location_name}</div>
                         </div>
                         <div className="aacts">
+                          {nAportes > 0 && (
+                            <span className="abadge" style={{ background: "#fde68a", color: "#92400e" }} title={t.tabContribs}>
+                              {nAportes} ⬆
+                            </span>
+                          )}
                           <span className="abadge">{SM[p.estatus][lang]}</span>
                           <button className="amini" onClick={() => editPerson(p)}>
                             {ICON.edit}
                           </button>
                           {isAdmin && (
                             <button className="amini del" onClick={() => deletePerson(p.id)}>
+                              {ICON.trash}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {adminTab === "rescatados" && !editType && (
+                  <div>
+                    <div className="note" style={{ marginBottom: 12 }}>
+                      <span className="resc-ic">{ICON.rescue}</span>
+                      {t.rescuedReviewNote}
+                    </div>
+                    <button className="addbtn" onClick={newRescatado}>
+                      {ICON.plus}
+                      {t.addRescued}
+                    </button>
+                    {admSearchBar}
+                    {rescAdmin.filter((r) => admHit(r.nombres + " " + r.apellidos + " " + (r.ci ?? "") + " " + (r.rescue_site ?? ""))).length === 0 && (
+                      <div className="asub" style={{ padding: "8px 2px" }}>{admQ ? t.admSearchNone : t.rescuedNone}</div>
+                    )}
+                    {rescAdmin
+                      .filter((r) => admHit(r.nombres + " " + r.apellidos + " " + (r.ci ?? "") + " " + (r.rescue_site ?? "")))
+                      .map((r) => (
+                      <div className="arow st-resc" key={r.id}>
+                        <div className="ai">
+                          <div className="aname">{(r.nombres + " " + r.apellidos).trim() || "—"}</div>
+                          <div className="asub">
+                            {[
+                              r.edad != null ? r.edad + " " + t.yrs : null,
+                              r.sexo === "M" ? t.male : r.sexo === "F" ? t.female : null,
+                              r.rescue_site,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || t.rescuedStatus}
+                          </div>
+                        </div>
+                        <div className="aacts">
+                          <button className="amini resc-promote" title={t.promote} onClick={() => startPromote(r)}>
+                            {ICON.pin}
+                          </button>
+                          <button className="amini" onClick={() => editRescatado(r)}>
+                            {ICON.edit}
+                          </button>
+                          {isAdmin && (
+                            <button className="amini del" onClick={() => deleteRescatado(r.id)}>
                               {ICON.trash}
                             </button>
                           )}
@@ -3012,6 +3358,50 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                         ))}
                       </select>
                     </div>
+                    {/* Verified is the publish gate (§8): a photo only shows publicly once
+                        the record is verified. Admin-only — volunteers' edits are reviewed. */}
+                    {isAdmin && (
+                      <div className="fld">
+                        <span className="flabel">{t.verified}</span>
+                        <div className="seg">
+                          <button className={"segb " + (!draft?.verified ? "segb-on" : "")} onClick={setDV("verified", false)}>
+                            {t.verifiedNo}
+                          </button>
+                          <button className={"segb " + (draft?.verified ? "segb-on" : "")} onClick={setDV("verified", true)}>
+                            {t.verifiedYes}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {/* Pending photo/info contributions for THIS person — approve/reject in place. */}
+                    {editId && contribs.some((c) => c.patient_id === editId) && (
+                      <div className="fld">
+                        <span className="flabel">{t.tabContribs}</span>
+                        <span className="fhint">{t.contribReviewNote}</span>
+                        {contribs
+                          .filter((c) => c.patient_id === editId)
+                          .map((c) => (
+                            <div className="arow" key={c.id}>
+                              {c.foto_url && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={c.foto_url} alt="" loading="lazy" decoding="async" className="upload-thumb" style={{ width: 48, height: 48, marginRight: 10 }} />
+                              )}
+                              <div className="ai">
+                                {c.descripcion && <div className="asub">{c.descripcion}</div>}
+                                {c.contacto && <div className="asub mono">{c.contacto}</div>}
+                              </div>
+                              <div className="aacts">
+                                <button className="amini" title={t.contribApprove} onClick={() => reviewContribution(c.id, "approve")}>
+                                  {ICON.check}
+                                </button>
+                                <button className="amini del" title={t.contribReject} onClick={() => reviewContribution(c.id, "reject")}>
+                                  {ICON.trash}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
                     <div className="ebtns">
                       <button className="btng" onClick={clearEdit}>
                         {t.cancel}
@@ -3025,6 +3415,162 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                         {t.del}
                       </button>
                     )}
+                  </div>
+                )}
+
+                {editType === "rescatado" && (
+                  <div className="form">
+                    <div className="note">
+                      <span className="resc-ic">{ICON.rescue}</span>
+                      {t.rescuedFieldNote}
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_ape}</span>
+                      <input className="finput" value={draft?.apellidos || ""} onChange={setD("apellidos")} placeholder={t.f_ape} />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_nom}</span>
+                      <input className="finput" value={draft?.nombres || ""} onChange={setD("nombres")} placeholder={t.f_nom} />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_minor}</span>
+                      <div className="seg">
+                        <button className={"segb " + (!draft?.is_minor ? "segb-on" : "")} onClick={setDV("is_minor", false)}>
+                          {t.no}
+                        </button>
+                        <button className={"segb " + (draft?.is_minor ? "segb-on" : "")} onClick={setDV("is_minor", true)}>
+                          {t.yes}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="frow">
+                      <div className="fld">
+                        <span className="flabel">{t.f_ci}</span>
+                        <input
+                          className="finput mono"
+                          value={draft?.is_minor ? "MENOR" : draft?.ci || ""}
+                          onChange={setD("ci")}
+                          placeholder="V-00.000.000"
+                          disabled={!!draft?.is_minor}
+                        />
+                      </div>
+                      <div className="fld">
+                        <span className="flabel">{t.f_edad}</span>
+                        <input className="finput" value={draft?.edad || ""} onChange={setD("edad")} placeholder="00" inputMode="numeric" />
+                      </div>
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_sexo}</span>
+                      <div className="seg">
+                        <button className={"segb " + (draft?.sexo === "F" ? "segb-on" : "")} onClick={setDV("sexo", "F")}>
+                          {t.female}
+                        </button>
+                        <button className={"segb " + (draft?.sexo === "M" ? "segb-on" : "")} onClick={setDV("sexo", "M")}>
+                          {t.male}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_rescueSite}</span>
+                      <input className="finput" value={draft?.rescue_site || ""} onChange={setD("rescue_site")} placeholder={t.f_rescueSite} />
+                      <span className="fhint">{t.f_rescueSiteHint}</span>
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_notas}</span>
+                      <textarea
+                        className="finput"
+                        rows={3}
+                        value={draft?.notas || ""}
+                        onChange={(e) => setDraft((d) => ({ ...(d || {}), notas: e.target.value }))}
+                        placeholder={t.f_notasHint}
+                      />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_contact}</span>
+                      <input className="finput" value={draft?.contacto || ""} onChange={setD("contacto")} placeholder="+58…" />
+                    </div>
+                    <div className="note">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+                      </svg>
+                      {t.rescuedPublicNote}
+                    </div>
+                    <div className="ebtns">
+                      <button className="btng" onClick={clearEdit}>
+                        {t.cancel}
+                      </button>
+                      <button className="btnp" onClick={saveRescatado}>
+                        {t.save}
+                      </button>
+                    </div>
+                    {canDelete && (
+                      <button className="edel" onClick={() => editId && deleteRescatado(editId)}>
+                        {t.del}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {editType === "promote" && (
+                  <div className="form">
+                    <div className="note">
+                      <span className="resc-ic">{ICON.pin}</span>
+                      {t.promoteHint}
+                    </div>
+                    <div className="arow" style={{ borderBottom: "none" }}>
+                      <div className="ai">
+                        <div className="aname">{((draft?.nombres || "") + " " + (draft?.apellidos || "")).trim() || "—"}</div>
+                        <div className="asub">
+                          {[
+                            draft?.edad ? draft.edad + " " + t.yrs : null,
+                            draft?.sexo === "M" ? t.male : draft?.sexo === "F" ? t.female : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_center}</span>
+                      <select className="fselect" value={draft?.location_id || ""} onChange={setD("location_id")}>
+                        {locations.map((l) => (
+                          <option key={l.location_id} value={l.location_id}>
+                            {l.canonical_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.f_status}</span>
+                      <select className="fselect" value={draft?.estatus || "INGRESADO"} onChange={setD("estatus")}>
+                        {statusOpts.map((s) => (
+                          <option key={s.v} value={s.v}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {isAdmin && (
+                      <div className="fld">
+                        <span className="flabel">{t.verified}</span>
+                        <div className="seg">
+                          <button className={"segb " + (!draft?.verified ? "segb-on" : "")} onClick={setDV("verified", false)}>
+                            {t.verifiedNo}
+                          </button>
+                          <button className={"segb " + (draft?.verified ? "segb-on" : "")} onClick={setDV("verified", true)}>
+                            {t.verifiedYes}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <div className="ebtns">
+                      <button className="btng" onClick={clearEdit}>
+                        {t.cancel}
+                      </button>
+                      <button className="btnp" onClick={savePromotion}>
+                        {t.promoteTitle}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

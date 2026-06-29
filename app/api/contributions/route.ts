@@ -56,7 +56,12 @@ export async function POST(request: Request) {
   const { error } = await supabase
     .from("contributions")
     .insert({ patient_id: b.patient_id, foto_url, descripcion: desc, contacto, status: "pending" });
-  if (error) return NextResponse.json({ error: "insert_failed" }, { status: 502 });
+  if (error) {
+    // Most common cause: db/contributions.sql not run yet (relation missing), or the
+    // anon-insert RLS policy is absent. Surface the real reason for diagnosis.
+    console.error("[contributions] insert failed:", error.code, error.message, error.details ?? "");
+    return NextResponse.json({ error: "insert_failed", code: error.code, message: error.message }, { status: 502 });
+  }
 
   // "Received for review" — never published until a staff member approves it (§8).
   return NextResponse.json({ ok: true });
