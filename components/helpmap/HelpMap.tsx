@@ -9,7 +9,6 @@ import {
   TYPE_META,
   norm,
   protectMinor,
-  worst,
   type Donation,
   type Estatus,
   type Lang,
@@ -607,7 +606,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     });
     locations.forEach((l) => {
       if (!markers[l.location_id]) {
-        const m = L.marker([l.lat, l.lng], { icon: mkIcon(L, 0, SM.ALTA.color, false, false) }).addTo(map);
+        const m = L.marker([l.lat, l.lng], { icon: mkIcon(L, 0, TYPE_META[l.type].color, false, false) }).addTo(map);
         m.on("click", () => onMarkerRef.current(l.location_id));
         markers[l.location_id] = m;
       } else {
@@ -628,7 +627,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       const vis = all.filter((p) => tsMatch(p));
       const active = locationSel === l.location_id || focusId === l.location_id;
       const dim = vis.length === 0;
-      const color = SM[worst(vis.length ? vis : all)].color;
+      // Pin color reflects the location TYPE (hospital/shelter/morgue/acopio), not the
+      // worst patient status — so the count badge reads as data, not as a death toll.
+      const color = TYPE_META[l.type].color;
       m.setIcon(mkIcon(L, vis.length, color, active, dim));
       m.setZIndexOffset(active ? 1000 : dim ? -100 : 0);
     });

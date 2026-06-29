@@ -80,13 +80,18 @@ export interface TypeMeta {
   es: string;
   en: string;
   hasPatients: boolean;
+  // Pin color is driven by the location TYPE, not by patient status — otherwise a
+  // hospital whose worst record is FALLECIDO would paint its pin the gray of the
+  // "fallecido" filter and misread as a death toll. Type colors are chosen to be
+  // distinct from the status-filter colors in SM (blue/green/gray).
+  color: string;
 }
 
 export const TYPE_META: Record<LocationType, TypeMeta> = {
-  hospital: { es: "Hospital", en: "Hospital", hasPatients: true },
-  shelter: { es: "Refugio", en: "Shelter", hasPatients: true },
-  morgue: { es: "Morgue", en: "Morgue", hasPatients: true },
-  donation_centre: { es: "Centro de acopio", en: "Donation centre", hasPatients: false },
+  hospital: { es: "Hospital", en: "Hospital", hasPatients: true, color: "oklch(0.58 0.15 25)" },
+  shelter: { es: "Refugio", en: "Shelter", hasPatients: true, color: "oklch(0.68 0.15 70)" },
+  morgue: { es: "Morgue", en: "Morgue", hasPatients: true, color: "oklch(0.5 0.03 280)" },
+  donation_centre: { es: "Centro de acopio", en: "Donation centre", hasPatients: false, color: "oklch(0.6 0.15 300)" },
 };
 
 export interface StatusMeta {
