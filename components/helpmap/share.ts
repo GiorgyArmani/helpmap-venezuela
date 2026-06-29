@@ -65,29 +65,36 @@ export type StoryShareResult = "shared" | "downloaded" | "error";
 export async function shareStoryImage(id: string, title: string): Promise<StoryShareResult> {
   const storyUrl = patientPath(id) + "/story";
 
-  // Preferred path (mostly Android, and iOS when share is available): the native
-  // share sheet with the image FILE, so the user can pick Instagram → Story.
-  try {
-    const res = await fetch(storyUrl);
-    if (res.ok && typeof navigator !== "undefined" && typeof navigator.canShare === "function") {
-      const blob = await res.blob();
-      const file = new File([blob], `helpmap-${id}.png`, { type: "image/png" });
-      if (navigator.canShare({ files: [file] }) && typeof navigator.share === "function") {
-        try {
-          await navigator.share({ files: [file], title });
-          return "shared";
-        } catch {
-          /* user cancelled or activation lost → fall through to opening it */
+  // Native share sheet ONLY on phones/tablets — there it lets the user pick
+  // Instagram → Story. On desktop the OS "Share" dialog is unwanted (the user
+  // just wants the image to save and post manually), so we skip it.
+  const touchDevice =
+    typeof window !== "undefined" &&
+    (window.matchMedia?.("(pointer: coarse)").matches || (navigator.maxTouchPoints ?? 0) > 0);
+
+  if (touchDevice) {
+    try {
+      const res = await fetch(storyUrl);
+      if (res.ok && typeof navigator !== "undefined" && typeof navigator.canShare === "function") {
+        const blob = await res.blob();
+        const file = new File([blob], `helpmap-${id}.png`, { type: "image/png" });
+        if (navigator.canShare({ files: [file] }) && typeof navigator.share === "function") {
+          try {
+            await navigator.share({ files: [file], title });
+            return "shared";
+          } catch {
+            /* user cancelled or activation lost → fall through to opening it */
+          }
         }
       }
+    } catch {
+      /* fall through to the universal fallback */
     }
-  } catch {
-    /* fall through to the universal fallback */
   }
 
-  // Universal fallback (mobile-first): open the generated PNG in a new tab. On
-  // iOS the `<a download>` attribute is ignored, so we navigate to the image
-  // instead — the user long-presses to save it and uploads it to their story.
+  // Desktop, and mobile fallback: open the generated PNG in a new tab. The user
+  // saves it (right-click on desktop / long-press on iOS where `<a download>` is
+  // ignored) and uploads it to their Instagram story.
   if (typeof window !== "undefined") {
     window.open(storyUrl, "_blank", "noopener,noreferrer");
     return "downloaded";

@@ -61,7 +61,7 @@ export default function PatientActions({
     setBuilding(true);
     const r = await shareStoryImage(id, name);
     if (r === "shared") flash("Comparte la imagen en tu historia y agrega el sticker de enlace.");
-    else if (r === "downloaded") flash("Abrimos la imagen: mantén pulsado para guardarla y súbela a tu historia.");
+    else if (r === "downloaded") flash("Abrimos la imagen en otra pestaña: guárdala y súbela a tu historia.");
     else flash("No se pudo crear la imagen. Intenta de nuevo.");
     setBuilding(false);
   };
