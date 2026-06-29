@@ -49,6 +49,10 @@ const VOLUNTEER = {
   email: "info@helpmapvzla.net",
 };
 
+// Official Instagram — the brand/logo links here (main channel in Venezuela).
+const INSTAGRAM_HANDLE = "helpmapvzla";
+const INSTAGRAM_URL = "https://www.instagram.com/" + INSTAGRAM_HANDLE + "/";
+
 // Profiles we're recruiting — shown as a checklist in the volunteer panel.
 const VOLUNTEER_ROLES: { es: string; en: string }[] = [
   { es: "Médicos y médicas", en: "Doctors" },
@@ -1406,8 +1410,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         <div className="hrow">
           <a
             className="brand"
-            href="https://www.helpmapvzla.net"
-            title="by tropicalsadness x imagenesnacionales"
+            href={INSTAGRAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Síguenos en Instagram @${INSTAGRAM_HANDLE} · by tropicalsadness x imagenesnacionales`}
           >
             <span className="logo">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1415,7 +1421,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             </span>
             <div className="bcol">
               <span className="bname">{t.appName}</span>
-              <span className="btag">helpmapvzla.net</span>
+              <span className="btag">@{INSTAGRAM_HANDLE}</span>
             </div>
           </a>
           <div className="hright">
