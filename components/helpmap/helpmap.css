@@ -187,6 +187,21 @@ body{margin:0;background:#fff}
 .amini.del svg{color:var(--danger)}
 .amini.resc-promote{border-color:#bfe3e8;background:#f0fafb}
 .amini.resc-promote svg{color:#0e7c8b}
+/* Volunteer application review card — the admin reads the full profile + "why" to evaluate. */
+.volreq{border:1px solid var(--line);border-radius:13px;padding:13px;margin:8px 0;background:#fff}
+.volreq-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.volreq-name{font-weight:700;font-size:14.5px;color:var(--ink)}
+.volreq-badge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--soft2);color:#454a53;white-space:nowrap}
+.volreq-meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:7px;font-size:12.5px;color:var(--mut)}
+.volreq-meta>span{display:inline-flex;align-items:center;gap:5px;min-width:0}
+.volreq-meta svg{width:13px;height:13px;flex:0 0 auto}
+.volreq-date{margin-left:auto}
+.volreq-why{margin-top:10px;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px 11px}
+.volreq-why-label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--mut);margin-bottom:4px}
+.volreq-why p{margin:0;font-size:13px;line-height:1.45;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+.volreq-acts{display:flex;gap:8px;margin-top:12px}
+.volreq-acts .btnp,.volreq-acts .btng{flex:1}
+.volreq-acts .volreq-reject{flex:0 0 auto;color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,#fff)}
 .ebtns{display:flex;gap:10px;margin-top:6px}
 .ebtns .btnp,.ebtns .btng{flex:1}
 .edel{background:none;border:none;color:var(--danger);font-size:13px;font-weight:600;cursor:pointer;padding:13px;text-align:center;margin-top:2px}

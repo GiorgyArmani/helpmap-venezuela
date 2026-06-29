@@ -108,6 +108,18 @@ export interface Rescatado {
   updated_at: string;
 }
 
+// `volunteer_requests` — public volunteer applications an admin reviews. Read by admins
+// only (the public can submit but never read the queue). See db/volunteer_requests.sql.
+export interface VolunteerRequest {
+  id: string;
+  nombre: string;
+  email: string;
+  perfil: string | null;
+  fuentes: string | null;
+  telefono: string | null;
+  created_at: string;
+}
+
 export const STATE_LABEL: Record<VzlaState, string> = {
   distrito_capital: "Distrito Capital",
   la_guaira: "La Guaira",
@@ -215,6 +227,14 @@ export interface Strings {
   rescuedPublicNote: string; promote: string; promoteTitle: string; promoteHint: string; promoted: string;
   f_rescueSite: string; f_rescueSiteHint: string; f_notas: string; f_notasHint: string;
   admSearchPh: string; admSearchNone: string;
+  volSignupCta: string; volSignupTitle: string; volSignupSub: string; f_volName: string;
+  f_volProfile: string; f_volProfilePh: string; f_volSources: string; f_volSourcesPh: string;
+  f_volPhone: string; volSignupSend: string; volSignupSending: string; volSignupNote: string;
+  volSignupReq: string; volSignupDoneTitle: string; volSignupDoneBody: string;
+  volRequests: string; volReqNone: string; volApprove: string; volReject: string;
+  volApproved: string; volRejected: string; volReqReviewNote: string;
+  volSignupPass: string; volSignupPassHint: string; volPassShort: string; volEmailTaken: string;
+  volReqWhy: string;
 }
 
 export const T: Record<Lang, Strings> = {
@@ -414,6 +434,33 @@ export const T: Record<Lang, Strings> = {
     f_notasHint: "Descripción para identificar (uso interno, no se muestra en público).",
     admSearchPh: "Buscar en esta sección…",
     admSearchNone: "Sin coincidencias.",
+    volSignupCta: "Postularme como voluntario",
+    volSignupTitle: "Postúlate como voluntario",
+    volSignupSub: "Crea tu acceso. La cuenta queda inactiva hasta que un administrador apruebe tu solicitud.",
+    f_volName: "Nombre y apellido",
+    f_volProfile: "Tu perfil",
+    f_volProfilePh: "Selecciona tu perfil",
+    f_volSources: "Tus fuentes de información / por qué darte acceso",
+    f_volSourcesPh: "Cuéntanos tu rol y de dónde sacas información veraz…",
+    f_volPhone: "Teléfono / WhatsApp (opcional)",
+    volSignupSend: "Enviar solicitud",
+    volSignupSending: "Enviando…",
+    volSignupNote: "Verificamos cada colaborador antes de habilitarlo: así protegemos la veracidad de los datos.",
+    volSignupReq: "Agrega tu nombre y un correo válido.",
+    volSignupDoneTitle: "¡Solicitud enviada!",
+    volSignupDoneBody: "Tu cuenta quedó creada pero inactiva. Cuando un administrador apruebe tu solicitud, podrás entrar en /login con el correo y la contraseña que elegiste.",
+    volRequests: "Solicitudes pendientes",
+    volReqNone: "No hay solicitudes pendientes.",
+    volApprove: "Aprobar",
+    volReject: "Rechazar",
+    volApproved: "Voluntario aprobado y notificado por correo",
+    volRejected: "Solicitud rechazada",
+    volReqReviewNote: "Solicitudes públicas de voluntariado. La cuenta ya existe (sin acceso); al aprobar se le activa el rol. Rechazar elimina la cuenta.",
+    volSignupPass: "Crea tu contraseña",
+    volSignupPassHint: "Mínimo 6 caracteres. La usarás para entrar una vez aprobada tu solicitud.",
+    volPassShort: "La contraseña debe tener al menos 6 caracteres.",
+    volEmailTaken: "Ese correo ya está registrado.",
+    volReqWhy: "Por qué darle acceso / sus fuentes",
   },
   en: {
     appName: "HelpMap VE", tagline: "Humanitarian OSINT",
@@ -611,6 +658,33 @@ export const T: Record<Lang, Strings> = {
     f_notasHint: "Description to help identify (internal use, not shown publicly).",
     admSearchPh: "Search in this section…",
     admSearchNone: "No matches.",
+    volSignupCta: "Apply as a volunteer",
+    volSignupTitle: "Apply as a volunteer",
+    volSignupSub: "Create your access. The account stays inactive until an admin approves your application.",
+    f_volName: "Full name",
+    f_volProfile: "Your profile",
+    f_volProfilePh: "Select your profile",
+    f_volSources: "Your information sources / why grant you access",
+    f_volSourcesPh: "Tell us your role and where your truthful info comes from…",
+    f_volPhone: "Phone / WhatsApp (optional)",
+    volSignupSend: "Send application",
+    volSignupSending: "Sending…",
+    volSignupNote: "We verify every collaborator before enabling them — that's how we protect the data's accuracy.",
+    volSignupReq: "Add your name and a valid email.",
+    volSignupDoneTitle: "Application sent!",
+    volSignupDoneBody: "Your account is created but inactive. Once an admin approves your application, you can sign in at /login with the email and password you chose.",
+    volRequests: "Pending applications",
+    volReqNone: "No pending applications.",
+    volApprove: "Approve",
+    volReject: "Reject",
+    volApproved: "Volunteer approved and emailed",
+    volRejected: "Application rejected",
+    volReqReviewNote: "Public volunteer applications. The account already exists (no access); approving grants the role. Rejecting deletes the account.",
+    volSignupPass: "Create your password",
+    volSignupPassHint: "At least 6 characters. You'll use it to sign in once your application is approved.",
+    volPassShort: "Password must be at least 6 characters.",
+    volEmailTaken: "That email is already registered.",
+    volReqWhy: "Why grant access / their sources",
   },
 };
 

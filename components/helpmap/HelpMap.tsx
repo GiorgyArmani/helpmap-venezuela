@@ -19,6 +19,7 @@ import {
   type Rescatado,
   type RescatadoPublic,
   type Sexo,
+  type VolunteerRequest,
   type VzlaState,
 } from "./data";
 import { createClient } from "@/utils/supabase/client";
@@ -61,6 +62,15 @@ const VOLUNTEER_ROLES: { es: string; en: string }[] = [
   { es: "Personal de salud", en: "Health workers" },
   { es: "Rescatistas y Protección Civil", en: "Rescuers & Civil Protection" },
   { es: "Con acceso a información veraz y de primera mano", en: "With access to truthful, first-hand information" },
+];
+
+// Profile options for the volunteer signup form's "perfil" select.
+const VOL_PROFILES: { value: string; es: string; en: string }[] = [
+  { value: "medico", es: "Médico/a", en: "Doctor" },
+  { value: "enfermero", es: "Enfermero/a", en: "Nurse" },
+  { value: "salud", es: "Personal de salud", en: "Health worker" },
+  { value: "rescate", es: "Rescatista / Protección Civil", en: "Rescuer / Civil Protection" },
+  { value: "otro", es: "Otro", en: "Other" },
 ];
 
 type AdminTab = "centros" | "personas" | "voluntarios" | "listas" | "donaciones" | "rescatados";
@@ -327,9 +337,21 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
   // Volunteer management (admin) + list upload (staff)
   const [volunteers, setVolunteers] = useState<{ user_id: string; email: string }[]>([]);
+  const [volReqs, setVolReqs] = useState<VolunteerRequest[]>([]); // pending applications (admin)
   const [volEmail, setVolEmail] = useState("");
   const [volPass, setVolPass] = useState("");
   const [volBusy, setVolBusy] = useState(false);
+
+  // Public volunteer signup (in the "Súmate al voluntariado" panel)
+  const [vsName, setVsName] = useState("");
+  const [vsEmail, setVsEmail] = useState("");
+  const [vsPass, setVsPass] = useState("");
+  const [vsProfile, setVsProfile] = useState("");
+  const [vsSources, setVsSources] = useState("");
+  const [vsPhone, setVsPhone] = useState("");
+  const [vsBusy, setVsBusy] = useState(false);
+  const [vsDone, setVsDone] = useState(false);
+  const [vsOpen, setVsOpen] = useState(false); // toggles the form open in the panel
   const [listBusy, setListBusy] = useState(false);
   const [listNote, setListNote] = useState("");
   const [listLoc, setListLoc] = useState("");
@@ -1058,11 +1080,13 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setGeoResults([]);
   };
 
-  // Clear the in-panel search when switching tabs (but keep it across edit/cancel
-  // within a tab, so staff can keep iterating over the same filtered list).
-  useEffect(() => {
+  // Switch admin tab: clear the in-panel search (but NOT on edit/cancel — clearEdit
+  // leaves admQ alone — so staff keep their filter while iterating within a tab).
+  const switchTab = (tab: AdminTab) => {
+    setAdminTab(tab);
     setAdmQ("");
-  }, [adminTab]);
+    clearEdit();
+  };
 
   const editCenter = (l: Location) => {
     setEditType("center");
@@ -1688,6 +1712,82 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       /* non-fatal */
     }
   };
+  // Admin: pending volunteer applications + approve/reject.
+  const loadVolRequests = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/volunteers?requests=1");
+      if (!res.ok) return;
+      const j = await res.json();
+      setVolReqs(Array.isArray(j.requests) ? j.requests : []);
+    } catch {
+      /* offline / non-fatal */
+    }
+  }, []);
+  const reviewVolRequest = async (id: string, action: "approve" | "reject") => {
+    try {
+      const res = await fetch("/api/admin/volunteers", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+      if (res.ok) {
+        showToast(action === "approve" ? t.volApproved : t.volRejected);
+        setVolReqs((r) => r.filter((x) => x.id !== id));
+        if (action === "approve") loadVolunteers();
+      } else {
+        showToast(t.volCreateErr);
+      }
+    } catch {
+      showToast(t.volCreateErr);
+    }
+  };
+
+  // Public: submit a volunteer application. The server creates a no-access account with
+  // the chosen password; an admin grants the role to unlock access.
+  const submitVolunteerSignup = async () => {
+    const email = vsEmail.trim();
+    if (!vsName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showToast(t.volSignupReq);
+      return;
+    }
+    if (vsPass.length < 6) {
+      showToast(t.volPassShort);
+      return;
+    }
+    setVsBusy(true);
+    try {
+      const res = await fetch("/api/volunteers/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: vsName.trim(),
+          email,
+          password: vsPass,
+          perfil: vsProfile || null,
+          fuentes: vsSources.trim() || null,
+          telefono: vsPhone.trim() || null,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setVsDone(true);
+        setVsName("");
+        setVsEmail("");
+        setVsPass("");
+        setVsProfile("");
+        setVsSources("");
+        setVsPhone("");
+      } else if (j.error === "email_taken") {
+        showToast(t.volEmailTaken);
+      } else {
+        showToast(t.saveError);
+      }
+    } catch {
+      showToast(t.saveError);
+    } finally {
+      setVsBusy(false);
+    }
+  };
 
   // ---- List photo upload (staff): forward to n8n via /api/lists ----------
   const onPickList = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1848,8 +1948,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 className="gear"
                 onClick={() => {
                   setView("admin");
-                  setAdminTab("centros"); // staff (admin + volunteer) can now manage centers
-                  clearEdit();
+                  switchTab("centros"); // staff (admin + volunteer) can now manage centers
                   loadContributions(); // pending aportes drive the count badges + in-card review
                 }}
               >
@@ -2466,7 +2565,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       {view === "volunteer" && (
         <div className="overlay">
           <div className="ovhead">
-            <button className="oicon" onClick={() => setView(null)}>
+            <button
+              className="oicon"
+              onClick={() => {
+                setView(null);
+                setVsOpen(false);
+                setVsDone(false);
+              }}
+            >
               {ICON.back}
             </button>
             <span className="ohtitle">{t.volunteerTitle}</span>
@@ -2481,24 +2587,99 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </div>
               ))}
             </div>
-            <p className="vol-ask">{t.volunteerAsk}</p>
-            <div className="dactions">
-              {VOLUNTEER.whatsapp && (
-                <a
+
+            {vsDone ? (
+              <div className="contact-ack">
+                <div className="contact-ack-ico">{ICON.check}</div>
+                <h3 className="contact-ack-title">{t.volSignupDoneTitle}</h3>
+                <p className="contact-ack-body">{t.volSignupDoneBody}</p>
+                <button
                   className="btng"
-                  href={`https://wa.me/${VOLUNTEER.whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(t.volunteerWaMsg)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={() => {
+                    setVsDone(false);
+                    setVsOpen(false);
+                  }}
                 >
-                  {ICON.wa}
-                  {t.volunteerWa}
-                </a>
-              )}
-              <button className="btnp" onClick={() => openContact("volunteer")}>
-                {ICON.mail}
-                {t.volunteerEmail}
-              </button>
-            </div>
+                  {t.contribAckClose}
+                </button>
+              </div>
+            ) : vsOpen ? (
+              <div className="form">
+                <p className="donate-sub">{t.volSignupSub}</p>
+                <div className="fld">
+                  <span className="flabel">{t.f_volName}</span>
+                  <input className="finput" value={vsName} onChange={(e) => setVsName(e.target.value)} placeholder={t.f_volName} />
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.email}</span>
+                  <input className="finput" type="email" autoComplete="email" value={vsEmail} onChange={(e) => setVsEmail(e.target.value)} placeholder="tu@correo.com" />
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.volSignupPass}</span>
+                  <input className="finput" type="password" autoComplete="new-password" value={vsPass} onChange={(e) => setVsPass(e.target.value)} placeholder="••••••" />
+                  <span className="fhint">{t.volSignupPassHint}</span>
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.f_volProfile}</span>
+                  <select className="fselect" value={vsProfile} onChange={(e) => setVsProfile(e.target.value)}>
+                    <option value="">{t.f_volProfilePh}</option>
+                    {VOL_PROFILES.map((pf) => (
+                      <option key={pf.value} value={pf.value}>
+                        {pf[lang]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.f_volSources}</span>
+                  <textarea className="finput" rows={3} value={vsSources} onChange={(e) => setVsSources(e.target.value)} placeholder={t.f_volSourcesPh} />
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.f_volPhone}</span>
+                  <input className="finput" value={vsPhone} onChange={(e) => setVsPhone(e.target.value)} placeholder="+58…" />
+                </div>
+                <div className="note">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 11v5M12 8h.01" />
+                  </svg>
+                  {t.volSignupNote}
+                </div>
+                <div className="ebtns">
+                  <button className="btng" onClick={() => setVsOpen(false)}>
+                    {t.cancel}
+                  </button>
+                  <button className="btnp" onClick={submitVolunteerSignup} disabled={vsBusy}>
+                    {vsBusy ? t.volSignupSending : t.volSignupSend}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="vol-ask">{t.volunteerAsk}</p>
+                <button className="btnp" onClick={() => setVsOpen(true)} style={{ width: "100%" }}>
+                  {ICON.check}
+                  {t.volSignupCta}
+                </button>
+                <div className="dactions" style={{ marginTop: 10 }}>
+                  {VOLUNTEER.whatsapp && (
+                    <a
+                      className="btng"
+                      href={`https://wa.me/${VOLUNTEER.whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(t.volunteerWaMsg)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {ICON.wa}
+                      {t.volunteerWa}
+                    </a>
+                  )}
+                  <button className="btng" onClick={() => openContact("volunteer")}>
+                    {ICON.mail}
+                    {t.volunteerEmail}
+                  </button>
+                </div>
+              </>
+            )}
             <p className="donate-note">{t.volunteerNote}</p>
           </div>
         </div>
@@ -2840,36 +3021,26 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 <div className="admtabs">
                   <button
                     className={"atab " + (adminTab === "centros" ? "atab-on" : "")}
-                    onClick={() => {
-                      setAdminTab("centros");
-                      clearEdit();
-                    }}
+                    onClick={() => switchTab("centros")}
                   >
                     {t.tabCenters}
                   </button>
                   <button
                     className={"atab " + (adminTab === "personas" ? "atab-on" : "")}
-                    onClick={() => {
-                      setAdminTab("personas");
-                      clearEdit();
-                    }}
+                    onClick={() => switchTab("personas")}
                   >
                     {t.tabPeople}
                   </button>
                   <button
                     className={"atab " + (adminTab === "listas" ? "atab-on" : "")}
-                    onClick={() => {
-                      setAdminTab("listas");
-                      clearEdit();
-                    }}
+                    onClick={() => switchTab("listas")}
                   >
                     {t.tabLists}
                   </button>
                   <button
                     className={"atab " + (adminTab === "rescatados" ? "atab-on" : "")}
                     onClick={() => {
-                      setAdminTab("rescatados");
-                      clearEdit();
+                      switchTab("rescatados");
                       loadRescAdmin();
                     }}
                   >
@@ -2877,10 +3048,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   </button>
                   <button
                     className={"atab " + (adminTab === "donaciones" ? "atab-on" : "")}
-                    onClick={() => {
-                      setAdminTab("donaciones");
-                      clearEdit();
-                    }}
+                    onClick={() => switchTab("donaciones")}
                   >
                     {t.tabDonations}
                   </button>
@@ -2888,9 +3056,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     <button
                       className={"atab " + (adminTab === "voluntarios" ? "atab-on" : "")}
                       onClick={() => {
-                        setAdminTab("voluntarios");
-                        clearEdit();
+                        switchTab("voluntarios");
                         loadVolunteers();
+                        loadVolRequests();
                       }}
                     >
                       {t.tabVolunteers}
@@ -3131,7 +3299,47 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
                 {adminTab === "voluntarios" && isAdmin && !editType && (
                   <div className="form">
+                    {/* Pending public applications — approve to provision the account. */}
                     <div className="fld">
+                      <span className="flabel">{t.volRequests}</span>
+                      <span className="fhint">{t.volReqReviewNote}</span>
+                      {volReqs.length === 0 && <div className="asub" style={{ padding: "6px 2px" }}>{t.volReqNone}</div>}
+                      {volReqs.map((rq) => (
+                        <div className="volreq" key={rq.id}>
+                          <div className="volreq-head">
+                            <span className="volreq-name">{rq.nombre || rq.email}</span>
+                            {rq.perfil && (
+                              <span className="volreq-badge">
+                                {VOL_PROFILES.find((pf) => pf.value === rq.perfil)?.[lang] ?? rq.perfil}
+                              </span>
+                            )}
+                          </div>
+                          <div className="volreq-meta">
+                            <span>{ICON.mail}{rq.email}</span>
+                            {rq.telefono && <span>{ICON.phone}{rq.telefono}</span>}
+                            <span className="volreq-date">
+                              {new Date(rq.created_at).toLocaleDateString(lang === "es" ? "es-VE" : "en-US")}
+                            </span>
+                          </div>
+                          {rq.fuentes && (
+                            <div className="volreq-why">
+                              <span className="volreq-why-label">{t.volReqWhy}</span>
+                              <p>{rq.fuentes}</p>
+                            </div>
+                          )}
+                          <div className="volreq-acts">
+                            <button className="btng volreq-reject" onClick={() => reviewVolRequest(rq.id, "reject")}>
+                              {t.volReject}
+                            </button>
+                            <button className="btnp" onClick={() => reviewVolRequest(rq.id, "approve")}>
+                              {ICON.check}
+                              {t.volApprove}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="fld" style={{ marginTop: 8 }}>
                       <span className="flabel">{t.email}</span>
                       <input
                         className="finput"
