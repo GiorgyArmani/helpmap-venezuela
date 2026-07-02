@@ -165,16 +165,27 @@ export async function PATCH(request: Request) {
         let publicUrl = c.foto_url;
         if (!c.foto_url.startsWith("http")) {
           const { data: blob, error: dlErr } = await supabase.storage.from(CONTRIB_BUCKET).download(c.foto_url);
-          if (dlErr || !blob) return NextResponse.json({ error: "publish_failed" }, { status: 502 });
+          if (dlErr || !blob) {
+            // Usually: db/storage_photos.sql not run (no contrib-photos bucket / no staff
+            // download policy), or the stored path is stale. Surface the real reason.
+            console.error("[contributions] download failed:", CONTRIB_BUCKET, c.foto_url, dlErr?.message ?? "no blob");
+            return NextResponse.json({ error: "publish_failed", stage: "download", message: dlErr?.message }, { status: 502 });
+          }
           const pubPath = `contrib/${c.foto_url.split("/").pop()}`;
           const { error: upErr } = await supabase.storage
             .from(PUBLIC_BUCKET)
             .upload(pubPath, blob, { contentType: "image/jpeg", upsert: true });
-          if (upErr) return NextResponse.json({ error: "publish_failed" }, { status: 502 });
+          if (upErr) {
+            console.error("[contributions] upload failed:", PUBLIC_BUCKET, pubPath, upErr.message);
+            return NextResponse.json({ error: "publish_failed", stage: "upload", message: upErr.message }, { status: 502 });
+          }
           publicUrl = supabase.storage.from(PUBLIC_BUCKET).getPublicUrl(pubPath).data.publicUrl;
         }
         const { error: attErr } = await supabase.from("patients").update({ foto_url: publicUrl }).eq("id", c.patient_id);
-        if (attErr) return NextResponse.json({ error: "attach_failed" }, { status: 502 });
+        if (attErr) {
+          console.error("[contributions] attach failed:", c.patient_id, attErr.message);
+          return NextResponse.json({ error: "attach_failed", message: attErr.message }, { status: 502 });
+        }
       }
     }
   }
@@ -183,7 +194,10 @@ export async function PATCH(request: Request) {
     .from("contributions")
     .update({ status: b.action === "approve" ? "approved" : "rejected", reviewed_by: uid, reviewed_at: new Date().toISOString() })
     .eq("id", b.id);
-  if (error) return NextResponse.json({ error: "update_failed" }, { status: 502 });
+  if (error) {
+    console.error("[contributions] status update failed:", b.id, error.message);
+    return NextResponse.json({ error: "update_failed", message: error.message }, { status: 502 });
+  }
 
   return NextResponse.json({ ok: true });
 }

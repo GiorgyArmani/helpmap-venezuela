@@ -221,7 +221,7 @@ export interface Strings {
   contribAckTitle: string; contribAckBody: string; contribAckClose: string; contribReq: string;
   contribContact: string; tabContribs: string; contribApprove: string; contribReject: string;
   contribApproved: string; contribRejected: string; contribNone: string; contribReviewNote: string;
-  contribPublishConfirm: string;
+  contribPublishConfirm: string; contribPublishTitle: string;
   maintBanner: string; maintTitle: string; maintHint: string;
   maintActive: string; maintInactive: string; maintOn: string; maintOff: string;
   tabRescued: string; rescuedListTitle: string; rescuedListSub: string; rescuedNone: string;
@@ -415,6 +415,7 @@ export const T: Record<Lang, Strings> = {
     contribNone: "No hay aportes pendientes.",
     contribPublishConfirm:
       "Esta persona ya está VERIFICADA, así que aprobar esta foto la hará pública de inmediato (sin paso adicional). ¿Confirmas que la foto es correcta y puede mostrarse públicamente?",
+    contribPublishTitle: "Publicar foto",
     contribReviewNote: "Aportes del público a registros existentes. Al aprobar una foto se adjunta a la persona (solo se ve en público si el registro está verificado).",
     maintBanner: "Sitio en mantenimiento: estamos re-verificando los datos. Algunos registros pueden no aparecer. Vuelve pronto.",
     maintTitle: "Modo mantenimiento",
@@ -649,6 +650,7 @@ export const T: Record<Lang, Strings> = {
     contribReviewNote: "Public contributions to existing records. Approving a photo attaches it to the person (it only shows publicly if the record is verified).",
     contribPublishConfirm:
       "This person is already VERIFIED, so approving this photo publishes it immediately (no extra step). Confirm the photo is correct and may be shown publicly?",
+    contribPublishTitle: "Publish photo",
     maintBanner: "Site under maintenance: we're re-verifying the data. Some records may not appear. Check back soon.",
     maintTitle: "Maintenance mode",
     maintHint: "Shows a notice to all visitors (data is being re-verified and may be incomplete).",

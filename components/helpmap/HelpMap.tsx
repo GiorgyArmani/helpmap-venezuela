@@ -413,6 +413,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [cImgs, setCImgs] = useState<string[]>([]);
   const [cBusy, setCBusy] = useState(false);
   const [cDone, setCDone] = useState(false); // shows the "we got your message" confirmation panel
+  // Contribution-photo publish confirmation (in-app modal, not window.confirm): holds
+  // the pending contribution id when approving a photo onto an already-verified record.
+  const [pubConfirm, setPubConfirm] = useState<string | null>(null);
   // Why the user is writing: drives the email subject + form copy. The contact form
   // is only reached from the volunteer / donations CTAs (no generic contact entry).
   const [contactKind, setContactKind] = useState<"volunteer" | "donation">("volunteer");
@@ -609,19 +612,37 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       }
       try {
         const supabase = getSupabase();
+        // PostgREST caps a single response at db-max-rows (default 1000), so `.limit()`
+        // alone silently truncates once we pass ~1000 records (the "1000 personas" bug).
+        // Page through with .range() until a short page comes back to fetch them all.
+        const fetchAll = async (
+          table: string,
+          orderCol: string,
+        ): Promise<{ data: any[] | null; error: any }> => {
+          const PAGE = 1000;
+          const all: any[] = [];
+          for (let from = 0; ; from += PAGE) {
+            const { data, error } = await supabase
+              .from(table)
+              .select("*")
+              .order(orderCol, { ascending: false })
+              .range(from, from + PAGE - 1);
+            if (error) return { data: null, error };
+            const rows = data ?? [];
+            all.push(...rows);
+            if (rows.length < PAGE) break; // last page
+          }
+          return { data: all, error: null };
+        };
         const [locRes, patRes, donRes, setRes, rescRes] = await Promise.all([
           supabase.from("locations").select("*").eq("active", true),
           // Reads the privacy-filtered VIEW, never the base table (CLAUDE.md §2).
-          supabase
-            .from("patients_public")
-            .select("*")
-            .order("updated_at", { ascending: false })
-            .limit(2000),
+          fetchAll("patients_public", "updated_at"),
           supabase.from("donations").select("*").eq("active", true).order("sort", { ascending: true }),
           // Maintenance flag — non-critical; tolerate the table not existing yet.
           supabase.from("app_settings").select("maintenance").eq("id", 1).maybeSingle(),
           // Rescued (not-yet-transferred) people — privacy-filtered VIEW, non-critical.
-          supabase.from("rescatados_public").select("*").order("created_at", { ascending: false }).limit(2000),
+          fetchAll("rescatados_public", "created_at"),
         ]);
         if (cancelled) return;
         if (locRes.error) throw locRes.error;
@@ -967,13 +988,40 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     // (the §8 "double lock" only holds while the record is unverified), so we force
     // a deliberate confirm that the photo is real and not junk. Photos always need
     // this human check; text-only aportes don't publish a face, so they pass through.
+    // We read `verified` LIVE from the DB (patients_public) rather than local state —
+    // the patient may be filtered out / stale in cache, and skipping the confirm on a
+    // record that is actually verified in DB would publish a face without the check.
     if (action === "approve") {
       const c = contribs.find((x) => x.id === id);
-      const pat = c ? patients.find((p) => p.id === c.patient_id) : undefined;
-      if (c?.foto_url && pat?.verified) {
-        if (typeof window !== "undefined" && !window.confirm(t.contribPublishConfirm)) return;
+      if (c?.foto_url) {
+        let verified = false;
+        try {
+          const { data } = await getSupabase()
+            .from("patients_public")
+            .select("verified")
+            .eq("id", c.patient_id)
+            .maybeSingle();
+          verified = !!data?.verified;
+        } catch {
+          // If we can't confirm live (offline), fall back to local state — and if that's
+          // also unknown, err toward asking (treat as verified) so we never skip the check.
+          const pat = patients.find((p) => p.id === c.patient_id);
+          verified = pat ? !!pat.verified : true;
+        }
+        // Instead of the native window.confirm (jarring browser chrome, poor on
+        // mobile), open an in-app modal and defer the actual publish to its confirm.
+        if (verified) {
+          setPubConfirm(id);
+          return;
+        }
       }
     }
+    await doReviewContribution(id, action);
+  };
+
+  // Performs the actual approve/reject network call. Split out so the corroboration
+  // modal (pubConfirm) can call it after the user confirms, without re-running the gate.
+  const doReviewContribution = async (id: string, action: "approve" | "reject") => {
     try {
       const res = await fetch("/api/contributions", {
         method: "PATCH",
@@ -984,7 +1032,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         showToast(action === "approve" ? t.contribApproved : t.contribRejected);
         setContribs((c) => c.filter((x) => x.id !== id));
       } else {
-        showToast(t.saveError);
+        // Surface the real reason (stage/message from the endpoint) so a failed
+        // approval is diagnosable in the field instead of a generic "error".
+        const info = await res.json().catch(() => null as { error?: string; stage?: string; message?: string } | null);
+        const detail = info ? [info.error, info.stage, info.message].filter(Boolean).join(" · ") : "";
+        showToast(detail ? `${t.saveError}: ${detail}` : t.saveError);
       }
     } catch {
       /* non-fatal */
@@ -3278,7 +3330,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                               {a.summary && <span className="feed-sum">{a.summary}</span>}
                             </div>
                             <div className="feed-meta">
-                              <span>{a.actor_email ?? (a.action === "contribution_new" ? t.newsPublic : t.newsSystem)}</span>
+                              <span>{a.actor_email ?? (a.action === "contribution_new" || a.action === "volunteer_apply" ? t.newsPublic : t.newsSystem)}</span>
                               <span className="feed-dot">·</span>
                               <span>{timeAgo(a.created_at, lang)}</span>
                             </div>
@@ -4011,6 +4063,33 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       )}
 
       {!!toast && <div className="toast">{toast}</div>}
+
+      {/* In-app publish confirmation (replaces window.confirm): corroborate a photo
+          before it goes public on an already-verified record (§2/§8 double-lock). */}
+      {pubConfirm && (
+        <div className="cfmwrap" onClick={() => setPubConfirm(null)}>
+          <div className="cfm" onClick={(e) => e.stopPropagation()}>
+            <div className="cfm-icon">{ICON.check}</div>
+            <h3 className="cfm-title">{t.contribPublishTitle}</h3>
+            <p className="cfm-body">{t.contribPublishConfirm}</p>
+            <div className="cfm-actions">
+              <button className="cfm-cancel" onClick={() => setPubConfirm(null)}>
+                {t.cancel}
+              </button>
+              <button
+                className="cfm-ok"
+                onClick={() => {
+                  const id = pubConfirm;
+                  setPubConfirm(null);
+                  void doReviewContribution(id, "approve");
+                }}
+              >
+                {t.contribApprove}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Tour
         open={tourOpen}

@@ -87,6 +87,7 @@ body{margin:0;background:#fff}
 .empty{padding:36px 26px;text-align:center;color:var(--mut);font-size:13px;line-height:1.5}
 .overlay{position:absolute;inset:0;z-index:800;background:#fff;display:flex;flex-direction:column;animation:slideup .26s ease}
 @keyframes slideup{from{transform:translateY(16px);opacity:.3}to{transform:none;opacity:1}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
 .ovhead{display:flex;align-items:center;gap:11px;padding:calc(13px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 13px calc(14px + env(safe-area-inset-left));border-bottom:1px solid var(--line);flex:0 0 auto}
 .oicon{width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);flex:0 0 auto}
 .oicon svg{width:18px;height:18px}
@@ -426,3 +427,15 @@ textarea.finput{resize:vertical;min-height:96px;font-family:inherit;line-height:
 .tour-loginlink:hover{color:var(--ink);border-color:var(--ink)}
 .tour-loginlink svg{width:15px;height:15px}
 @media(min-width:520px){.tourwrap{align-items:center}.tour{border-radius:22px}}
+
+/* In-app confirm modal (replaces window.confirm for the publish-photo gate) */
+.cfmwrap{position:fixed;inset:0;z-index:1001;display:flex;align-items:flex-end;justify-content:center;background:rgba(11,14,19,.55);padding:0;animation:fadein .18s ease}
+.cfm{background:#fff;width:100%;max-width:400px;border-radius:20px 20px 0 0;padding:24px 22px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;box-shadow:0 -10px 40px rgba(16,20,28,.28);animation:slideup .24s ease}
+.cfm-icon{width:46px;height:46px;border-radius:14px;background:var(--soft);display:flex;align-items:center;justify-content:center;color:var(--ok)}
+.cfm-icon svg{width:24px;height:24px}
+.cfm-title{font-size:19px;font-weight:800;letter-spacing:-.3px;color:var(--ink);margin:2px 0 0;line-height:1.2}
+.cfm-body{font-size:14px;line-height:1.5;color:#454a53;margin:0}
+.cfm-actions{display:flex;gap:10px;margin-top:6px}
+.cfm-cancel{flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 20px;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;font-family:inherit}
+.cfm-ok{flex:1;background:var(--ok);color:#fff;border:none;border-radius:13px;padding:14px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit}
+@media(min-width:520px){.cfmwrap{align-items:center}.cfm{border-radius:20px}}
