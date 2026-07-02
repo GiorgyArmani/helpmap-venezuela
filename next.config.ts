@@ -15,15 +15,8 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
       },
-      {
-        // The service worker must never be cached, so clients always pick up
-        // a new version (and a new CACHE_VERSION) on the next visit.
-        source: "/sw.js",
-        headers: [
-          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
-          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
-        ],
-      },
+      // NOTE: /sw.js is now served by app/sw.js/route.ts, which sets its own
+      // no-cache headers and injects a per-build CACHE_VERSION.
     ];
   },
 };

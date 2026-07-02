@@ -57,10 +57,16 @@ export async function POST(request: Request) {
       body: JSON.stringify({ ...b, received_at: new Date().toISOString(), source: b.source ?? "web" }),
     });
     if (!res.ok) {
+      // Surface WHAT n8n returned so a 502 is diagnosable (e.g. 404 = webhook not
+      // registered → workflow not activated or a Test URL used instead of the
+      // Production URL; 500 = a node failed inside the workflow).
+      const detail = await res.text().catch(() => "");
+      console.error(`[intake] upstream ${res.status} from n8n:`, detail.slice(0, 500));
       return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 });
     }
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) {
+    console.error("[intake] upstream unreachable:", e);
     return NextResponse.json({ error: "upstream_unreachable" }, { status: 502 });
   }
 }
