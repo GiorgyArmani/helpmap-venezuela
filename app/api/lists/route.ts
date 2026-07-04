@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "lists_not_configured" }, { status: 503 });
   }
 
-  let body: { image_b64?: string; filename?: string; note?: string; location_id?: string };
+  let body: { image_b64?: string; filename?: string; note?: string; location_id?: string; data_date?: string };
   try {
     body = await request.json();
   } catch {
@@ -48,6 +48,9 @@ export async function POST(request: Request) {
         filename: body.filename ?? null,
         note: body.note ?? null,
         location_id: body.location_id ?? null,
+        // Date the list CORRESPONDS to (yyyy-mm-dd) — distinct from received_at
+        // (when it was uploaded). On-site lists are often reported days later.
+        data_date: body.data_date ?? null,
         uploaded_by: gate.user.email ?? gate.user.id,
         received_at: new Date().toISOString(),
         source: "volunteer_web",

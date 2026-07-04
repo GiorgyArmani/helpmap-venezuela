@@ -11,8 +11,13 @@ type Slide = {
   eyebrow: { es: string; en: string };
   title: { es: string; en: string };
   body: { es: string; en: string };
-  icon: React.ReactNode;
   steps?: { t: { es: string; en: string }; d: { es: string; en: string } }[];
+  // Optional: only shown when it mirrors a real in-app icon the user taps (map pin,
+  // search, share, report +, volunteer). Purely decorative slides omit it.
+  icon?: React.ReactNode;
+  // When set, the slide shows a prominent CTA button (e.g. the volunteer signup).
+  // Reinforces the "tap the icon above" copy with a direct one-tap action.
+  cta?: "volunteer";
 };
 
 const I = {
@@ -26,6 +31,19 @@ const I = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z" />
       <path d="M9 4v14M15 6v14" />
+    </svg>
+  ),
+  // Matches the in-app map marker (ICON.pin) — "explora el mapa" = tap the pins.
+  pin: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z" />
+      <circle cx="12" cy="10" r="2.4" />
+    </svg>
+  ),
+  // Matches the in-app "Reportar" FAB (ICON.plus).
+  plus: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
     </svg>
   ),
   share: (
@@ -60,6 +78,12 @@ const I = {
       <path d="M3 13v6h2.5l5.5 1.5 8-2.5a1.7 1.7 0 0 0-1.2-3.1" />
     </svg>
   ),
+  info: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 7.5h.01" />
+    </svg>
+  ),
 };
 
 const SLIDES: Slide[] = [
@@ -70,7 +94,6 @@ const SLIDES: Slide[] = [
       es: "Base de datos verificada de personas afectadas por los terremotos del 24 de Junio 2026, en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
       en: "A verified database of people affected by the earthquakes in Caracas, La Guaira and Miranda, continuously updated by medical staff in the field. It helps you locate your family.",
     },
-    icon: I.heart,
   },
   {
     eyebrow: { es: "Paso 1", en: "Step 1" },
@@ -79,7 +102,7 @@ const SLIDES: Slide[] = [
       es: "Toca un punto en el mapa o filtra por estado y centro. Verás quién está reportado en cada lugar.",
       en: "Tap a point on the map or filter by state and center. You'll see who is reported at each place.",
     },
-    icon: I.map,
+    icon: I.pin,
   },
   {
     eyebrow: { es: "Paso 2", en: "Step 2" },
@@ -89,6 +112,15 @@ const SLIDES: Slide[] = [
       en: "Use the search to find a person by first name, surname or ID. Filter by status: admitted, discharged or deceased.",
     },
     icon: I.search,
+  },
+  {
+    eyebrow: { es: "Importante", en: "Important" },
+    title: { es: "Cómo leer los datos", en: "How to read the data" },
+    body: {
+      es: "Cada ficha muestra su fecha de última actualización. En una emergencia hay múltiples traslados: esta lista no garantiza que la persona siga en ese centro, pero sí la veracidad y la fecha del dato publicado. La información se actualiza a medida que llegan nuevos aportes. Úsala como herramienta de búsqueda, consulta y colaboración ciudadana.",
+      en: "Each record shows its last-updated date. In an emergency there are multiple transfers: this list does not guarantee the person is still at that center, but it does guarantee the veracity and date of the published data. Information is updated as new contributions arrive. Use it as a tool for searching, consultation and citizen collaboration.",
+    },
+    icon: I.info,
   },
   {
     eyebrow: { es: "Paso 3", en: "Step 3" },
@@ -106,7 +138,7 @@ const SLIDES: Slide[] = [
       es: "Si tienes datos de alguien, toca «Subir info». Tu envío NO se publica de inmediato. Sigue estos pasos antes de aparecer en el mapa:",
       en: "If you have details about someone, tap “Upload info”. Your submission is NOT published right away. It follows these steps before appearing on the map:",
     },
-    icon: I.upload,
+    icon: I.plus,
     steps: [
       {
         t: { es: "Recibido", en: "Received" },
@@ -142,7 +174,6 @@ const SLIDES: Slide[] = [
       es: "Somos una iniciativa voluntaria. Esta información existe solo para reunir familias. Así protegemos los datos:",
       en: "We are a volunteer initiative. This information exists only to reunite families. This is how we protect the data:",
     },
-    icon: I.shield,
     steps: [
       {
         t: { es: "No lucramos", en: "No profit" },
@@ -178,10 +209,11 @@ const SLIDES: Slide[] = [
     eyebrow: { es: "Súmate", en: "Join us" },
     title: { es: "¿Eres personal de salud o rescate?", en: "Are you health or rescue staff?" },
     body: {
-      es: "Esto es un esfuerzo ciudadano: mientras más datos confirmemos, más rápido llenamos el mapa. Si eres médico, enfermero, personal de salud o rescatista, escríbenos con tu perfil y tus fuentes para darte acceso. Toca el ícono de voluntariado arriba.",
-      en: "This is a citizen effort: the more data we confirm, the faster we fill the map. If you are a doctor, nurse, health worker or rescuer, write to us with your profile and sources so we can grant you access. Tap the volunteer icon at the top.",
+      es: "Esto es un esfuerzo ciudadano: mientras más datos confirmemos, más rápido llenamos el mapa. Si eres médico, enfermero, personal de salud o rescatista, súmate con tu perfil y tus fuentes para darte acceso.",
+      en: "This is a citizen effort: the more data we confirm, the faster we fill the map. If you are a doctor, nurse, health worker or rescuer, join us with your profile and sources so we can grant you access.",
     },
     icon: I.hands,
+    cta: "volunteer",
   },
 ];
 
@@ -193,8 +225,8 @@ const STAFF_SLIDES: Slide[] = [
     eyebrow: { es: "Eres parte del equipo", en: "You're on the team" },
     title: { es: "Bienvenido, voluntario", en: "Welcome, volunteer" },
     body: {
-      es: "Gracias por ayudar a reunir familias. Tienes acceso de confianza: lo que publiques se refleja de inmediato. Úsalo con responsabilidad — podemos revocar el acceso en cualquier momento.",
-      en: "Thank you for helping reunite families. You have trusted access: what you publish reflects immediately. Use it responsibly — access can be revoked at any time.",
+      es: "Gracias por ayudar a reunir familias. Tienes acceso de confianza: lo que publiques se refleja de inmediato. Úsalo con responsabilidad; podemos revocar el acceso en cualquier momento.",
+      en: "Thank you for helping reunite families. You have trusted access: what you publish reflects immediately. Use it responsibly; access can be revoked at any time.",
     },
     icon: I.hands,
   },
@@ -260,6 +292,7 @@ export default function Tour({
   lang,
   onClose,
   onLogin,
+  onVolunteer,
   variant = "public",
 }: {
   open: boolean;
@@ -267,6 +300,8 @@ export default function Tour({
   onClose: () => void;
   // Staff login entry, shown under the docs link. Omitted when already signed in.
   onLogin?: () => void;
+  // Opens the volunteer signup panel. Powers the CTA button on the "Súmate" slide.
+  onVolunteer?: () => void;
   // "public" = first-run visitor tour; "staff" = volunteer/admin onboarding on sign-in.
   variant?: "public" | "staff";
 }) {
@@ -284,7 +319,7 @@ export default function Tour({
   return (
     <div className="tourwrap" onClick={onClose}>
       <div className="tour" onClick={(e) => e.stopPropagation()}>
-        <div className="tour-icon">{s.icon}</div>
+        {s.icon && <div className="tour-icon">{s.icon}</div>}
         <div>
           <div className="tour-eyebrow">{L(s.eyebrow)}</div>
           <h2 className="tour-title">{L(s.title)}</h2>
@@ -303,6 +338,13 @@ export default function Tour({
               </div>
             ))}
           </div>
+        )}
+
+        {s.cta === "volunteer" && onVolunteer && (
+          <button className="tour-cta" onClick={onVolunteer}>
+            {I.hands}
+            {lang === "es" ? "Quiero ser voluntario" : "I want to volunteer"}
+          </button>
         )}
 
         <div className="tour-dots">
@@ -325,10 +367,6 @@ export default function Tour({
             {last ? (lang === "es" ? "Entendido" : "Got it") : lang === "es" ? "Siguiente" : "Next"}
           </button>
         </div>
-
-        <a className="tour-doclink" href={lang === "en" ? "/docs?lang=en" : "/docs"}>
-          {lang === "es" ? "Ver documentación" : "View documentation"}
-        </a>
 
         {onLogin && (
           <button className="tour-loginlink" onClick={onLogin}>

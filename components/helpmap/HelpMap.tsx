@@ -41,7 +41,7 @@ import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-type View = null | "detail" | "share" | "report" | "admin" | "donate" | "volunteer" | "contact" | "contribute" | "rescued";
+type View = null | "detail" | "share" | "report" | "reportMissing" | "admin" | "donate" | "volunteer" | "contact" | "contribute" | "rescued";
 
 // External donation partners surfaced in the "Donar" panel.
 // Volunteer recruiting contact. ⚠️ Fill with the crew's real channel before
@@ -73,7 +73,7 @@ const VOL_PROFILES: { value: string; es: string; en: string }[] = [
   { value: "otro", es: "Otro", en: "Other" },
 ];
 
-type AdminTab = "novedades" | "centros" | "personas" | "voluntarios" | "listas" | "donaciones" | "rescatados";
+type AdminTab = "novedades" | "centros" | "personas" | "voluntarios" | "listas" | "donaciones" | "rescatados" | "reportes";
 
 // One row of the activity/audit feed (db/audit_log.sql).
 type AuditEntry = {
@@ -85,6 +85,21 @@ type AuditEntry = {
   entity_type: string;
   entity_id: string | null;
   summary: string | null;
+};
+
+// A pending missing-person report (public "Reportar" flow → missing_reports table).
+type MissingReport = {
+  id: string;
+  apellidos: string;
+  nombres: string;
+  ci: string | null;
+  edad: number | null;
+  zona: string | null;
+  descripcion: string | null;
+  reporter_name: string | null;
+  reporter_contact: string | null;
+  status: string;
+  created_at: string;
 };
 
 // Human labels for each audit action (kept out of the big translations object).
@@ -299,6 +314,12 @@ const ICON = {
       <path d="M3 13v6h2.5l5.5 1.5 8-2.5a1.7 1.7 0 0 0-1.2-3.1" />
     </svg>
   ),
+  search: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  ),
 };
 
 // Map a Nominatim address (or the display label as fallback) to one of our VzlaState
@@ -388,6 +409,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // Volunteer management (admin) + list upload (staff)
   const [volunteers, setVolunteers] = useState<{ user_id: string; email: string }[]>([]);
   const [volReqs, setVolReqs] = useState<VolunteerRequest[]>([]); // pending applications (admin)
+  const [reports, setReports] = useState<MissingReport[]>([]); // pending missing-person reports (staff)
   const [volEmail, setVolEmail] = useState("");
   const [volPass, setVolPass] = useState("");
   const [volBusy, setVolBusy] = useState(false);
@@ -407,6 +429,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [listBusy, setListBusy] = useState(false);
   const [listNote, setListNote] = useState("");
   const [listLoc, setListLoc] = useState("");
+  const [listDate, setListDate] = useState(""); // date the list corresponds to (yyyy-mm-dd), optional
   // In-app result banner after a lists upload (a toast fades / can be missed on 3G).
   const [listResult, setListResult] = useState<{ kind: "ok" | "partial" | "error"; msg: string } | null>(null);
   const [listProgress, setListProgress] = useState<{ done: number; total: number } | null>(null);
@@ -454,14 +477,30 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [rEstatus, setREstatus] = useState<Estatus>("INGRESADO");
   const [rSexo, setRSexo] = useState<"M" | "F" | "">("");
   const [rProcedencia, setRProcedencia] = useState("");
+  const [rDataDate, setRDataDate] = useState(""); // date the info corresponds to (yyyy-mm-dd), optional
   const [rContact, setRContact] = useState("");
   const [rPhoto, setRPhoto] = useState<string | null>(null); // compressed JPEG data URL (adults only)
   const [rPhotoBusy, setRPhotoBusy] = useState(false);
+  // FAB "+" menu (Reportar desaparecido / Aportar datos).
+  const [fabOpen, setFabOpen] = useState(false);
+  // Report-a-missing-person form (the public "Reportar" flow → /api/reports).
+  const [rmApe, setRmApe] = useState("");
+  const [rmNom, setRmNom] = useState("");
+  const [rmCi, setRmCi] = useState("");
+  const [rmEdad, setRmEdad] = useState("");
+  const [rmZona, setRmZona] = useState("");
+  const [rmDesc, setRmDesc] = useState("");
+  const [rmReporter, setRmReporter] = useState("");
+  const [rmContact, setRmContact] = useState("");
+  const [rmBusy, setRmBusy] = useState(false);
+  const [rmDone, setRmDone] = useState(false);
   const [pending, setPending] = useState(() => (typeof window !== "undefined" ? queueCount() : 0));
   const [tourOpen, setTourOpen] = useState(false);
   const [staffTourOpen, setStaffTourOpen] = useState(false);
 
   const t = T[lang];
+  // Upper bound for the "fecha del dato" pickers — data can't be from the future.
+  const todayISO = new Date().toISOString().slice(0, 10);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -963,6 +1002,35 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       /* offline / non-fatal */
     }
   }, []);
+  // Staff-only: pending missing-person reports (the public "Reportar" queue). GET is
+  // staff-gated; tolerates the table not existing yet (pre db/missing_reports.sql).
+  const loadReports = useCallback(async () => {
+    try {
+      const res = await fetch("/api/reports");
+      if (!res.ok) return;
+      const j = await res.json();
+      setReports(Array.isArray(j.reports) ? j.reports : []);
+    } catch {
+      /* offline / non-fatal */
+    }
+  }, []);
+  const reviewReport = async (id: string, action: "reviewed" | "closed") => {
+    try {
+      const res = await fetch("/api/reports", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+      if (res.ok) {
+        showToast(t.reportUpdated);
+        setReports((r) => r.filter((x) => x.id !== id));
+      } else {
+        showToast(t.saveError);
+      }
+    } catch {
+      /* non-fatal */
+    }
+  };
   // Staff-only: the activity feed. RLS gates audit_log to is_staff(); tolerates the
   // table not existing yet (pre-migration) so nothing breaks before db/audit_log.sql.
   const loadAudit = useCallback(async () => {
@@ -1138,6 +1206,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setREstatus("INGRESADO");
     setRSexo("");
     setRProcedencia("");
+    setRDataDate("");
     setRContact("");
     setRPhoto(null);
     setRPhotoBusy(false);
@@ -1183,6 +1252,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       location_name: loc?.canonical_name ?? "",
       estatus: rEstatus,
       procedencia: rProcedencia.trim() || null,
+      data_date: rDataDate || null,
       contacto: rContact.trim() || null,
       lang,
       source: "web",
@@ -1202,6 +1272,47 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     } else {
       setPending(queueCount());
       showToast(t.queuedOffline);
+    }
+  };
+
+  // ---- Report a missing person (public "Reportar" flow → /api/reports) ----
+  // NOT the intake funnel: this is a lead/request the team works from the admin
+  // "Reportes" tab (+ an email). Never published on the map (CLAUDE.md §14).
+  const resetReportMissing = () => {
+    setRmApe(""); setRmNom(""); setRmCi(""); setRmEdad("");
+    setRmZona(""); setRmDesc(""); setRmReporter(""); setRmContact("");
+  };
+  const submitReportMissing = async () => {
+    if (!rmApe.trim() && !rmNom.trim()) {
+      showToast(t.rmReqName);
+      return;
+    }
+    setRmBusy(true);
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apellidos: rmApe.trim(),
+          nombres: rmNom.trim(),
+          ci: rmCi.trim() || null,
+          edad: rmEdad.trim() || null,
+          zona: rmZona.trim() || null,
+          descripcion: rmDesc.trim() || null,
+          reporter_name: rmReporter.trim() || null,
+          reporter_contact: rmContact.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        resetReportMissing();
+        setRmDone(true);
+      } else {
+        showToast(t.saveError);
+      }
+    } catch {
+      showToast(t.saveError);
+    } finally {
+      setRmBusy(false);
     }
   };
 
@@ -1870,9 +1981,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   useEffect(() => {
     if (!(isAdmin || isVolunteer)) return;
     loadContributions();
+    loadReports();
     loadAudit();
     if (isAdmin) loadVolRequests();
-  }, [isAdmin, isVolunteer, loadContributions, loadAudit, loadVolRequests]);
+  }, [isAdmin, isVolunteer, loadContributions, loadReports, loadAudit, loadVolRequests]);
   // Light auto-refresh (no realtime backend yet — CLAUDE.md §"Novedades" pending). While a
   // staff session is active we re-pull the cheap "needs attention" counts every 60s so the
   // gear badge stays live even before the panel is opened; the heavier 120-row audit feed is
@@ -1883,6 +1995,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     const tick = () => {
       if (typeof document !== "undefined" && document.hidden) return;
       loadContributions();
+      loadReports();
       if (isAdmin) loadVolRequests();
       if (view === "admin") loadAudit();
     };
@@ -1893,7 +2006,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [isAdmin, isVolunteer, view, loadContributions, loadVolRequests, loadAudit]);
+  }, [isAdmin, isVolunteer, view, loadContributions, loadReports, loadVolRequests, loadAudit]);
   const reviewVolRequest = async (id: string, action: "approve" | "reject") => {
     try {
       const res = await fetch("/api/admin/volunteers", {
@@ -1972,6 +2085,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     if (files.length === 0) return;
     const note = listNote.trim() || null;
     const loc = listLoc || null;
+    const dataDate = listDate || null;
     setListResult(null);
     setListProgress({ done: 0, total: files.length });
     setListBusy(true);
@@ -1988,6 +2102,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
               filename: file.name,
               note,
               location_id: loc,
+              data_date: dataDate,
             }),
           });
           if (res.ok) ok++;
@@ -2001,6 +2116,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         setListResult({ kind: "ok", msg });
         showToast(msg);
         setListNote("");
+        setListDate("");
       } else if (ok > 0) {
         const msg = t.listSentPartial.replace("{ok}", String(ok)).replace("{total}", String(files.length));
         setListResult({ kind: "partial", msg });
@@ -2168,8 +2284,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   <circle cx="15" cy="12" r="2.2" fill="#fff" />
                   <circle cx="8" cy="18" r="2.2" fill="#fff" />
                 </svg>
-                {contribs.length + volReqs.length > 0 && (
-                  <span className="gear-badge">{contribs.length + volReqs.length}</span>
+                {contribs.length + volReqs.length + reports.length > 0 && (
+                  <span className="gear-badge">{contribs.length + volReqs.length + reports.length}</span>
                 )}
               </button>
             )}
@@ -2315,10 +2431,49 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       )}
 
       {(showReport ?? true) && !view && (
-        <button className="fab" onClick={() => setView("report")}>
-          {ICON.plus}
-          {t.report}
-        </button>
+        <div className="fabwrap">
+          {fabOpen && (
+            <>
+              {/* Tap-away backdrop closes the menu. */}
+              <button className="fab-backdrop" aria-label="" onClick={() => setFabOpen(false)} />
+              <div className="fab-menu" role="menu">
+                <button
+                  className="fab-opt"
+                  role="menuitem"
+                  onClick={() => {
+                    setFabOpen(false);
+                    setRmDone(false);
+                    setView("reportMissing");
+                  }}
+                >
+                  <span className="fab-opt-ic">{ICON.search}</span>
+                  <span className="fab-opt-txt">
+                    <b>{t.menuReportTitle}</b>
+                    <small>{t.menuReportSub}</small>
+                  </span>
+                </button>
+                <button
+                  className="fab-opt"
+                  role="menuitem"
+                  onClick={() => {
+                    setFabOpen(false);
+                    setView("report");
+                  }}
+                >
+                  <span className="fab-opt-ic">{ICON.plus}</span>
+                  <span className="fab-opt-txt">
+                    <b>{t.menuContribTitle}</b>
+                    <small>{t.menuContribSub}</small>
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+          <button className={"fab " + (fabOpen ? "fab-open" : "")} onClick={() => setFabOpen((o) => !o)} aria-expanded={fabOpen}>
+            {ICON.plus}
+            {t.fabCta}
+          </button>
+        </div>
       )}
 
       <div className={"sheet " + (sheetOpen ? "sheet-open" : "")}>
@@ -2464,6 +2619,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </span>
               )}
             </div>
+            {/* Prominent "last updated" — in an emergency people need to see how fresh
+                the record is FIRST (multiple transfers happen; §14). Relative time big,
+                exact datetime beneath. */}
+            <div className="dupdated-hero">
+              <span className="duh-label">{t.updatedTitle}</span>
+              <span className="duh-time">{timeAgo(selP.updated_at, lang)}</span>
+              <span className="duh-date">
+                {new Date(selP.updated_at).toLocaleString(lang === "es" ? "es-VE" : "en-US")}
+              </span>
+            </div>
             <div className="drows">
               {[
                 { label: t.f_status, value: SM[selP.estatus][lang], mono: "" },
@@ -2482,8 +2647,15 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </div>
               ))}
             </div>
-            <div className="dupdated">
-              {t.updatedAgo + " " + new Date(selP.updated_at).toLocaleString(lang === "es" ? "es-VE" : "en-US")}
+            {/* Methodology disclaimer (§14): the list doesn't guarantee the person is
+                still at the center, but it does guarantee the veracity + date of the
+                published data. A tool for search, consultation and citizen collaboration. */}
+            <div className="ddisclaimer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 11v5M12 8h.01" />
+              </svg>
+              <span>{t.cardDisclaimer}</span>
             </div>
             <div className="dactions">
               <button className="btnp" onClick={shareCurrent}>
@@ -3086,6 +3258,17 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </select>
               </div>
               <div className="fld">
+                <span className="flabel">{t.f_dataDate}</span>
+                <input
+                  className="finput"
+                  type="date"
+                  max={todayISO}
+                  value={rDataDate}
+                  onChange={(e) => setRDataDate(e.target.value)}
+                />
+                <span className="fhint">{t.f_dataDateHint}</span>
+              </div>
+              <div className="fld">
                 <span className="flabel">{t.f_procedencia}</span>
                 <input className="finput" placeholder={t.f_procedenciaPh} value={rProcedencia} onChange={(e) => setRProcedencia(e.target.value)} />
                 <span className="fhint">{t.f_procedenciaHint}</span>
@@ -3134,6 +3317,83 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 {t.submit}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---- Report a missing person (public "Reportar" → /api/reports queue+email) ---- */}
+      {view === "reportMissing" && (
+        <div className="overlay">
+          <div className="ovhead">
+            <button className="oicon" onClick={() => setView(null)}>
+              {ICON.back}
+            </button>
+            <span className="ohtitle">{t.rmTitle}</span>
+          </div>
+          <div className="ovbody">
+            {rmDone ? (
+              <div className="contact-ack">
+                <div className="contact-ack-ico">{ICON.check}</div>
+                <h3 className="contact-ack-title">{t.rmDoneTitle}</h3>
+                <p className="contact-ack-body">{t.rmDoneBody}</p>
+                <button className="btnp" onClick={() => setView(null)}>
+                  {t.rmDoneClose}
+                </button>
+              </div>
+            ) : (
+              <div className="form">
+                <div className="infoneed">
+                  <span className="infoneed-d">{t.rmIntro}</span>
+                </div>
+                <div className="fld-sec">{t.rmWho}</div>
+                <div className="fld">
+                  <span className="flabel">{t.f_ape}</span>
+                  <input className="finput" placeholder={t.f_ape} value={rmApe} onChange={(e) => setRmApe(e.target.value)} />
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.f_nom}</span>
+                  <input className="finput" placeholder={t.f_nom} value={rmNom} onChange={(e) => setRmNom(e.target.value)} />
+                </div>
+                <div className="frow">
+                  <div className="fld">
+                    <span className="flabel">{t.f_ci}</span>
+                    <input className="finput mono" placeholder="V-00.000.000" value={rmCi} onChange={(e) => setRmCi(e.target.value)} />
+                  </div>
+                  <div className="fld">
+                    <span className="flabel">{t.f_edad}</span>
+                    <input className="finput" placeholder="00" inputMode="numeric" value={rmEdad} onChange={(e) => setRmEdad(e.target.value)} />
+                  </div>
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.rmZona}</span>
+                  <input className="finput" placeholder={t.rmZonaPh} value={rmZona} onChange={(e) => setRmZona(e.target.value)} />
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.rmDesc}</span>
+                  <textarea className="finput" rows={3} placeholder={t.rmDescPh} value={rmDesc} onChange={(e) => setRmDesc(e.target.value)} />
+                </div>
+                <div className="fld-sec">{t.rmReporter}</div>
+                <div className="fld">
+                  <span className="flabel">{t.rmReporter}</span>
+                  <input className="finput" placeholder={t.rmReporter} value={rmReporter} onChange={(e) => setRmReporter(e.target.value)} />
+                </div>
+                <div className="fld">
+                  <span className="flabel">{t.rmContact}</span>
+                  <input className="finput" placeholder="+58… / correo" value={rmContact} onChange={(e) => setRmContact(e.target.value)} />
+                  <span className="fhint">{t.rmContactHint}</span>
+                </div>
+                <div className="note">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 11v5M12 8h.01" />
+                  </svg>
+                  {t.rmNote}
+                </div>
+                <button className="btnp" onClick={submitReportMissing} disabled={rmBusy}>
+                  {rmBusy ? t.contribSending : t.rmSubmit}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3265,8 +3525,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     }}
                   >
                     {t.tabNews}
-                    {contribs.length + volReqs.length > 0 && (
-                      <span className="atab-badge">{contribs.length + volReqs.length}</span>
+                    {contribs.length + volReqs.length + reports.length > 0 && (
+                      <span className="atab-badge">{contribs.length + volReqs.length + reports.length}</span>
                     )}
                   </button>
                   <button
@@ -3295,6 +3555,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     }}
                   >
                     {t.tabRescued}
+                  </button>
+                  <button
+                    className={"atab " + (adminTab === "reportes" ? "atab-on" : "")}
+                    onClick={() => {
+                      switchTab("reportes");
+                      loadReports();
+                    }}
+                  >
+                    {t.tabReports}
+                    {reports.length > 0 && <span className="atab-badge">{reports.length}</span>}
                   </button>
                   <button
                     className={"atab " + (adminTab === "donaciones" ? "atab-on" : "")}
@@ -3353,11 +3623,22 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
                 {adminTab === "novedades" && !editType && (
                   <div className="feed">
-                    {(contribs.length > 0 || (isAdmin && volReqs.length > 0)) && (
+                    {(contribs.length > 0 || reports.length > 0 || (isAdmin && volReqs.length > 0)) && (
                       <div className="feed-pending">
                         {contribs.length > 0 && (
                           <button className="feed-pill" onClick={() => switchTab("personas")}>
                             {t.newsPendingContribs.replace("{n}", String(contribs.length))}
+                          </button>
+                        )}
+                        {reports.length > 0 && (
+                          <button
+                            className="feed-pill"
+                            onClick={() => {
+                              switchTab("reportes");
+                              loadReports();
+                            }}
+                          >
+                            {t.newsPendingReports.replace("{n}", String(reports.length))}
                           </button>
                         )}
                         {isAdmin && volReqs.length > 0 && (
@@ -3382,6 +3663,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                         // them stale (looks like "nothing updated").
                         loadAudit();
                         loadContributions();
+                        loadReports();
                         if (isAdmin) loadVolRequests();
                       }}
                     >
@@ -3570,6 +3852,48 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   </div>
                 )}
 
+                {adminTab === "reportes" && !editType && (
+                  <div>
+                    <div className="note" style={{ marginBottom: 12 }}>
+                      <span className="resc-ic">{ICON.search}</span>
+                      {t.rmIntro}
+                    </div>
+                    {reports.length === 0 && (
+                      <div className="asub" style={{ padding: "8px 2px" }}>{t.reportsNone}</div>
+                    )}
+                    {reports.map((r) => (
+                      <div className="arow" key={r.id}>
+                        <div className="ai">
+                          <div className="aname">{(r.nombres + " " + r.apellidos).trim() || "—"}</div>
+                          <div className="asub">
+                            {[
+                              r.ci ? r.ci : null,
+                              r.edad != null ? r.edad + " " + t.yrs : null,
+                              r.zona ? t.reportZonaLabel + ": " + r.zona : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                          {r.descripcion && <div className="asub" style={{ marginTop: 3 }}>{r.descripcion}</div>}
+                          <div className="asub" style={{ marginTop: 3 }}>
+                            {t.reportReporter}: {r.reporter_name || "—"}
+                            {r.reporter_contact ? " · " + r.reporter_contact : ""}
+                            {" · " + timeAgo(r.created_at, lang)}
+                          </div>
+                        </div>
+                        <div className="aacts">
+                          <button className="amini" title={t.reportMarkReviewed} onClick={() => reviewReport(r.id, "reviewed")}>
+                            {ICON.check}
+                          </button>
+                          <button className="amini del" title={t.reportCloseAction} onClick={() => reviewReport(r.id, "closed")}>
+                            {ICON.trash}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {adminTab === "listas" && !editType && (
                   <div className="form">
                     <div className="note" style={{ marginBottom: 4 }}>
@@ -3589,6 +3913,17 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.listDate}</span>
+                      <input
+                        className="finput"
+                        type="date"
+                        max={todayISO}
+                        value={listDate}
+                        onChange={(e) => setListDate(e.target.value)}
+                      />
+                      <span className="fhint">{t.listDateHint}</span>
                     </div>
                     <div className="fld">
                       <span className="flabel">{t.listNote}</span>
@@ -4190,6 +4525,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         open={tourOpen}
         lang={lang}
         onClose={closeTour}
+        onVolunteer={() => {
+          closeTour();
+          setView("volunteer");
+        }}
         onLogin={
           !user
             ? () => {

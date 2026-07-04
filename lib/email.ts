@@ -127,6 +127,59 @@ export async function sendContactEmail(opts: {
 // user-supplied address+name into an email from our own domain let attackers use us as
 // a phishing relay (see app/api/contact/route.ts). Contact confirmation is IN-APP only.
 
+// Missing-person report from a family/citizen (the public "Reportar desaparecido" flow).
+// Goes to the team inbox so it lands "al mail y a la app" alongside the DB queue row
+// (missing_reports). reply-to = the reporter's contact ONLY if it's a valid email, so the
+// team can reply directly. All fields are pre-sanitized by the route; escaped again here.
+export async function sendReportEmail(opts: {
+  apellidos?: string;
+  nombres?: string;
+  ci?: string | null;
+  edad?: number | null;
+  zona?: string | null;
+  descripcion?: string | null;
+  reporterName?: string;
+  reporterContact?: string | null;
+}): Promise<boolean> {
+  const tx = getTransport();
+  if (!tx) return false;
+  const to = process.env.CONTACT_TO || USER;
+  const fullName = `${cleanName(opts.nombres)} ${cleanName(opts.apellidos)}`.trim() || "Sin nombre";
+  const reporter = cleanName(opts.reporterName) || "Anónimo";
+  const contact = (opts.reporterContact || "").trim();
+  const replyTo = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contact) ? contact : undefined;
+  const row = (label: string, value: string) =>
+    `<p style="margin:0 0 4px;font-size:14px"><b style="color:#555">${label}:</b> ${escapeHtml(value)}</p>`;
+  const html = `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;color:#16191f">
+    <h2 style="margin:0 0 10px">Reporte de persona desaparecida</h2>
+    ${row("Persona buscada", fullName)}
+    ${opts.ci ? row("Cédula", opts.ci) : ""}
+    ${opts.edad != null ? row("Edad", String(opts.edad)) : ""}
+    ${opts.zona ? row("Última zona conocida", opts.zona) : ""}
+    ${opts.descripcion ? `<div style="white-space:pre-wrap;font-size:14px;line-height:1.5;background:#f7f8f9;border:1px solid #ebecef;border-radius:10px;padding:12px 14px;margin:10px 0">${escapeHtml(
+      opts.descripcion,
+    )}</div>` : ""}
+    <hr style="border:none;border-top:1px solid #ebecef;margin:14px 0" />
+    ${row("Reporta", reporter)}
+    ${contact ? row("Contacto", contact) : ""}
+    <p style="color:#888;font-size:12px;margin-top:14px">Revisa la pestaña <b>Reportes</b> del panel para gestionarlo.</p>
+  </div>`;
+  try {
+    await tx.sendMail({
+      from: FROM,
+      to,
+      replyTo,
+      subject: `[Reporte desaparecido] ${fullName} · HelpMap`,
+      html,
+    });
+    return true;
+  } catch (e) {
+    console.error("[email] report send failed:", e);
+    return false;
+  }
+}
+
 // Onboarding email for a newly created volunteer account.
 export async function sendVolunteerWelcome(to: string, tempPassword: string, siteUrl: string): Promise<boolean> {
   const loginUrl = `${siteUrl.replace(/\/+$/, "")}/login`;

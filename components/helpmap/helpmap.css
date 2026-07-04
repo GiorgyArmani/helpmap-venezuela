@@ -50,8 +50,23 @@ body{margin:0;background:#fff}
 .chip-on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .cdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
 .cdot-ok{background:var(--ok)}.cdot-adm{background:var(--adm)}.cdot-dec{background:var(--dec)}
-.fab{position:absolute;right:14px;bottom:248px;z-index:605;display:flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border:none;border-radius:999px;padding:12px 17px;font-size:13px;font-weight:600;box-shadow:0 7px 22px rgba(16,20,28,.3);cursor:pointer}
-.fab svg{width:16px;height:16px}
+.fabwrap{position:absolute;right:14px;bottom:248px;z-index:605;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.fab{position:relative;z-index:1;display:flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border:none;border-radius:999px;padding:12px 17px;font-size:13px;font-weight:600;box-shadow:0 7px 22px rgba(16,20,28,.3);cursor:pointer}
+.fab svg{width:16px;height:16px;transition:transform .2s}
+.fab-open svg{transform:rotate(45deg)}
+/* Tap-away backdrop for the FAB menu. Fixed to the viewport so a tap anywhere
+   outside closes it. The menu/button below carry z-index:1 so they sit ABOVE this
+   backdrop (a positioned element would otherwise paint over non-positioned siblings
+   and swallow the option taps). */
+.fab-backdrop{position:fixed;inset:0;background:transparent;border:none;cursor:default;z-index:0}
+.fab-menu{position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;width:min(82vw,300px)}
+.fab-opt{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 24px rgba(16,20,28,.18);padding:12px 13px;cursor:pointer;text-align:left;font-family:inherit}
+.fab-opt:active{background:var(--soft)}
+.fab-opt-ic{width:36px;height:36px;flex:0 0 auto;border-radius:10px;background:var(--soft2);display:flex;align-items:center;justify-content:center;color:var(--accent)}
+.fab-opt-ic svg{width:18px;height:18px}
+.fab-opt-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fab-opt-txt b{font-size:13.5px;font-weight:700;color:var(--ink)}
+.fab-opt-txt small{font-size:11.5px;color:var(--mut);line-height:1.3}
 .zoomctl{position:absolute;right:14px;bottom:calc(316px + env(safe-area-inset-bottom));z-index:605;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 5px 18px rgba(16,20,28,.18);overflow:hidden}
 .zbtn{width:46px;height:46px;border:none;background:#fff;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center}
 .zbtn:first-child{border-bottom:1px solid var(--line)}
@@ -104,6 +119,14 @@ body{margin:0;background:#fff}
 .dval{font-size:13.5px;font-weight:600;text-align:right}
 .dval.mono{font-weight:500;letter-spacing:.2px}
 .dupdated{font-size:11.5px;color:var(--mut);text-align:center;margin-top:15px}
+/* Prominent "last updated" banner at the top of the person card (§14 — freshness first). */
+.dupdated-hero{display:flex;flex-direction:column;align-items:center;gap:2px;margin:16px 0 4px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--soft)}
+.duh-label{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mut)}
+.duh-time{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:-.3px}
+.duh-date{font-size:12px;color:var(--mut)}
+/* Methodology disclaimer on the person card (veracity+date, not presence guarantee). */
+.ddisclaimer{display:flex;gap:9px;background:#fff8ef;border:1px solid #f3cba0;border-radius:12px;padding:12px 13px;font-size:11.5px;color:#6b5836;line-height:1.5;margin-top:14px}
+.ddisclaimer svg{width:16px;height:16px;flex:0 0 auto;color:#c98a2e;margin-top:1px}
 .dactions{display:flex;flex-direction:column;gap:10px;margin-top:18px}
 .btnp{background:var(--accent);color:#fff;border:none;border-radius:13px;padding:15px;font-size:14.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
 .btnp svg{width:16px;height:16px}
@@ -130,6 +153,8 @@ body{margin:0;background:#fff}
 .fld{display:flex;flex-direction:column;gap:6px}
 .flabel{font-size:12px;font-weight:600;color:var(--mut)}
 .fhint{font-size:11px;color:var(--mut);line-height:1.35}
+/* Section heading inside a form (groups fields, e.g. "¿A quién buscas?"). */
+.fld-sec{font-size:11.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--ink);margin-top:5px;border-top:1px solid var(--line);padding-top:15px}
 /* font-size:16px prevents iOS Safari from auto-zooming when a field is focused. */
 .finput,.fselect{border:1px solid var(--line);border-radius:11px;padding:13px 12px;font-size:16px;font-family:inherit;outline:none;background:#fff;color:var(--ink);width:100%}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -257,7 +282,7 @@ body{margin:0;background:#fff}
 /* Safe-area insets for notched / gesture-bar phones. */
 .topbar{padding-top:calc(12px + env(safe-area-inset-top));padding-left:calc(12px + env(safe-area-inset-left));padding-right:calc(12px + env(safe-area-inset-right))}
 .list{padding-bottom:env(safe-area-inset-bottom)}
-.fab{bottom:calc(248px + env(safe-area-inset-bottom))}
+.fabwrap{bottom:calc(248px + env(safe-area-inset-bottom))}
 .ovbody{padding-bottom:calc(30px + env(safe-area-inset-bottom))}
 
 /* Tablets / desktop: header spans the top — brand small at left, controls at
@@ -274,7 +299,7 @@ body{margin:0;background:#fff}
   .sheet:not(.sheet-open){height:320px}
   .sheet-open{height:calc(100dvh - 230px)}
   .handle{border-radius:18px 18px 0 0}
-  .fab{left:auto;right:24px;bottom:24px}
+  .fabwrap{left:auto;right:24px;bottom:24px}
   .zoomctl{right:24px}
   .overlay{left:12px;top:12px;bottom:12px;right:auto;width:430px;max-width:calc(100% - 24px);border-radius:18px;box-shadow:0 18px 54px rgba(16,20,28,.24);overflow:hidden}
   .toast{left:225px}
@@ -430,6 +455,8 @@ textarea.finput{resize:vertical;min-height:96px;font-family:inherit;line-height:
 .tour-skip{background:none;border:none;color:var(--mut);font-size:13px;font-weight:600;cursor:pointer;padding:13px 8px;font-family:inherit}
 .tour-back{background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 20px;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;font-family:inherit}
 .tour-next{flex:1;background:var(--accent);color:#fff;border:none;border-radius:13px;padding:14px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.tour-cta{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;margin-top:16px;padding:14px;background:#1c8a4e;color:#fff;border:none;border-radius:13px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 6px 18px rgba(28,138,78,.28)}
+.tour-cta svg{width:19px;height:19px}
 .tour-doclink{display:block;text-align:center;margin-top:12px;font-size:12.5px;font-weight:600;color:var(--mut);text-decoration:none}
 .tour-doclink:hover{color:var(--ink);text-decoration:underline}
 .tour-loginlink{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:10px;padding:11px;background:none;border:1px solid var(--line);border-radius:12px;font-size:12.5px;font-weight:600;color:var(--mut);cursor:pointer;font-family:inherit}

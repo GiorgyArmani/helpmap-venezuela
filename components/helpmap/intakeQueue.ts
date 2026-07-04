@@ -18,6 +18,11 @@ export interface IntakeSubmission {
   // Home origin / neighborhood. Admin-only — collected at intake for the team,
   // NEVER shown publicly (CLAUDE.md §2; the patients_public view strips it).
   procedencia: string | null;
+  // Date the information CORRESPONDS to (ISO yyyy-mm-dd), as reported by the
+  // submitter. Distinct from `createdAt` (when it was uploaded) — on-site data is
+  // often reported days after the fact, so the team needs the real data date to
+  // judge freshness. null when not provided.
+  data_date: string | null;
   contacto: string | null;
   lang: string;
   source: "web";

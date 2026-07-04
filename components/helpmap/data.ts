@@ -185,6 +185,7 @@ export interface Strings {
   f_address: string; geoSearch: string; geoSearching: string; geoFound: string; geoNotFound: string; geoHint: string; geoPick: string;
   photoBusy: string; photoError: string; removePhoto: string;
   f_procedencia: string; f_procedenciaPh: string; f_procedenciaHint: string;
+  f_dataDate: string; f_dataDateHint: string;
   storyBuilding: string; storyShared: string; storyDownloaded: string; storyError: string;
   donate: string; donateTitle: string; donateSub: string; donateCta: string; donateNote: string;
   saveError: string; delBlocked: string;
@@ -211,6 +212,7 @@ export interface Strings {
   volRevoke: string; volRevoked: string; volNone: string; volReviewNote: string; staffGuide: string;
   listTitle: string; listHint: string; listPick: string; listSending: string;
   listSent: string; listSentN: string; listSentPartial: string; listError: string; listNote: string;
+  listDate: string; listDateHint: string;
   tabDonations: string; addDonation: string; editDonation: string; savedDon: string;
   f_donName: string; f_donDesc: string; f_donSocial: string; f_donUrl: string;
   f_donInfo: string; f_donInfoHint: string; donCopy: string; donData: string;
@@ -238,6 +240,16 @@ export interface Strings {
   volApproved: string; volRejected: string; volReqReviewNote: string;
   volSignupPass: string; volSignupPassHint: string; volPassShort: string; volEmailTaken: string;
   volReqWhy: string;
+  fabCta: string;
+  menuReportTitle: string; menuReportSub: string; menuContribTitle: string; menuContribSub: string;
+  rmTitle: string; rmIntro: string; rmWho: string; rmZona: string; rmZonaPh: string;
+  rmDesc: string; rmDescPh: string; rmReporter: string; rmContact: string; rmContactHint: string;
+  rmSubmit: string; rmNote: string; rmReqName: string; rmSent: string;
+  rmDoneTitle: string; rmDoneBody: string; rmDoneClose: string;
+  tabReports: string; reportsNone: string; newsPendingReports: string;
+  reportMarkReviewed: string; reportCloseAction: string; reportReporter: string;
+  reportZonaLabel: string; reportUpdated: string;
+  updatedTitle: string; cardDisclaimer: string;
 }
 
 export const T: Record<Lang, Strings> = {
@@ -248,7 +260,7 @@ export const T: Record<Lang, Strings> = {
     female: "Femenino", male: "Masculino", ci: "Cédula", edad: "Edad", sexo: "Sexo", ubic: "Centro", type: "Tipo",
     municipality: "Municipio", state: "Estado", verified: "Verificado", verifiedYes: "Verificado", verifiedNo: "Sin verificar",
     updated: "Actualizado", share: "Compartir", seeMap: "Ver en el mapa", detailTitle: "Ficha de la persona",
-    reportTitle: "Subir información", whatsapp: "WhatsApp", call: "Llamar",
+    reportTitle: "Aportar datos", whatsapp: "WhatsApp", call: "Llamar",
     noPatientsHere: "Aún no hay personas registradas en este centro.",
     donationInfo: "Centro de acopio · información de contacto",
     staleData: "Datos posiblemente desactualizados (sin conexión)",
@@ -278,15 +290,17 @@ export const T: Record<Lang, Strings> = {
     igCopied: "Enlace copiado. Pégalo en tu historia o perfil de Instagram.",
     noteMinors: "La información de menores de edad está estrictamente protegida: nunca mostramos sus fotos. Su visualización completa se limita exclusivamente a personal médico y familiares.",
     f_address: "Buscar por nombre o dirección", geoSearch: "Buscar", geoSearching: "Buscando…",
-    geoFound: "Ubicación encontrada — verifica el pin en el mapa", geoNotFound: "No se encontró. Prueba con el nombre del centro o ingresa lat/lng a mano.",
+    geoFound: "Ubicación encontrada. Verifica el pin en el mapa", geoNotFound: "No se encontró. Prueba con el nombre del centro o ingresa lat/lng a mano.",
     geoHint: "Escribe el nombre del centro (ej. \"Hospital Central San Felipe\") o una dirección y pulsa Buscar. Verifica siempre el pin.",
-    geoPick: "Varias coincidencias — elige la correcta:",
+    geoPick: "Varias coincidencias, elige la correcta:",
     photoBusy: "Procesando foto…",
     photoError: "No se pudo procesar la imagen. Intenta con otra.",
     removePhoto: "Quitar foto",
     f_procedencia: "Procedencia",
     f_procedenciaPh: "Zona o sector de origen",
     f_procedenciaHint: "Solo para el equipo de verificación. No se muestra públicamente.",
+    f_dataDate: "Fecha del dato",
+    f_dataDateHint: "¿De cuándo es esta información? Puede diferir de la fecha de hoy.",
     storyBuilding: "Generando imagen para tu historia…",
     storyShared: "Elige Instagram → Historia y agrega el sticker de enlace.",
     storyDownloaded: "Abrimos la imagen en otra pestaña: guárdala y súbela a tu historia de Instagram.",
@@ -316,7 +330,7 @@ export const T: Record<Lang, Strings> = {
     volunteerWa: "Escríbenos por WhatsApp",
     volunteerEmail: "Escríbenos por correo",
     volunteerWaMsg: "Hola, quiero colaborar como voluntario/a de HelpMap VE. Mi perfil es: (ej. médico, enfermero, rescatista) ___. Mis fuentes de información son: ___.",
-    volunteerEmailSubj: "Quiero ser voluntario/a — HelpMap VE (perfil y fuentes)",
+    volunteerEmailSubj: "Quiero ser voluntario/a en HelpMap VE (perfil y fuentes)",
     volunteerNote:
       "Verificamos a cada colaborador. Los datos siempre se confirman con profesionales antes de publicarse.",
     donateJoin: "¿Ayudas con comida o medicamentos?",
@@ -328,7 +342,7 @@ export const T: Record<Lang, Strings> = {
       "Buscamos especialmente datos verificables de Morón, San Felipe y el estado Yaracuy, y de más hospitales en las zonas afectadas. Cualquier aporte suma.",
     shareDisclosure:
       "HelpMap trabaja para que solo datos confirmados en campo por contactos en centros de salud lleguen a la app.",
-    trustLine: "Datos confirmados en campo. Nuestro compromiso es ser una fuente verídica — ayúdanos a clarificar aún más.",
+    trustLine: "Datos confirmados en campo. Nuestro compromiso es ser una fuente verídica. Ayúdanos a clarificar aún más.",
     trustCta: "Colaborar",
     contact: "Contacto",
     contactTitle: "Escríbenos",
@@ -367,7 +381,7 @@ export const T: Record<Lang, Strings> = {
     volRevoke: "Revocar",
     volRevoked: "Acceso revocado.",
     volNone: "Aún no hay voluntarios.",
-    volReviewNote: "Tus cambios se publican de inmediato. Eres parte del equipo de confianza — actúa con responsabilidad; podemos revocar el acceso en cualquier momento.",
+    volReviewNote: "Tus cambios se publican de inmediato. Eres parte del equipo de confianza. Actúa con responsabilidad; podemos revocar el acceso en cualquier momento.",
     staffGuide: "Ver guía del equipo",
     listTitle: "Subir foto de lista",
     listHint:
@@ -379,6 +393,8 @@ export const T: Record<Lang, Strings> = {
     listSentPartial: "{ok} de {total} enviadas. Reintenta las que fallaron.",
     listError: "No se pudo enviar la lista. Intenta de nuevo.",
     listNote: "Nota (opcional)",
+    listDate: "Fecha del dato",
+    listDateHint: "¿De cuándo es esta lista? Puede diferir de la fecha de hoy.",
     tabDonations: "Donaciones",
     addDonation: "Agregar iniciativa",
     editDonation: "Editar iniciativa",
@@ -476,6 +492,39 @@ export const T: Record<Lang, Strings> = {
     volPassShort: "La contraseña debe tener al menos 6 caracteres.",
     volEmailTaken: "Ese correo ya está registrado.",
     volReqWhy: "Por qué darle acceso / sus fuentes",
+    fabCta: "Colaborar",
+    menuReportTitle: "Reportar desaparecido",
+    menuReportSub: "Buscas a alguien que no aparece en la lista",
+    menuContribTitle: "Aportar datos",
+    menuContribSub: "Tienes información de alguien en un centro",
+    rmTitle: "Reportar desaparecido",
+    rmIntro: "Cuéntanos a quién buscas. El equipo revisará la base de datos y te contactará si hay información. No se publica en el mapa.",
+    rmWho: "¿A quién buscas?",
+    rmZona: "Última zona o centro conocido",
+    rmZonaPh: "Ej. Catia, Hospital Vargas…",
+    rmDesc: "Detalles (señas, circunstancias)",
+    rmDescPh: "Todo lo que ayude a identificar o ubicar a la persona…",
+    rmReporter: "Tu nombre",
+    rmContact: "Tu contacto (WhatsApp / correo)",
+    rmContactHint: "Para que el equipo pueda comunicarse contigo. No se muestra públicamente.",
+    rmSubmit: "Enviar reporte",
+    rmNote: "El equipo revisa cada reporte y busca en la base de datos. Te contactaremos si hay novedades.",
+    rmReqName: "Indica al menos el nombre o el apellido de la persona.",
+    rmSent: "Reporte enviado. Gracias.",
+    rmDoneTitle: "Reporte recibido",
+    rmDoneBody: "Gracias. El equipo revisará la base de datos y te contactará por el medio que dejaste si hay información.",
+    rmDoneClose: "Entendido",
+    tabReports: "Reportes",
+    reportsNone: "No hay reportes pendientes.",
+    newsPendingReports: "{n} reportes de desaparecidos",
+    reportMarkReviewed: "Revisado",
+    reportCloseAction: "Cerrar",
+    reportReporter: "Reporta",
+    reportZonaLabel: "Última zona",
+    reportUpdated: "Reporte actualizado.",
+    updatedTitle: "Última actualización",
+    cardDisclaimer:
+      "Los datos reflejan el último registro disponible y su fecha. En una emergencia hay múltiples traslados: esta lista no garantiza que la persona siga en ese centro, pero sí la veracidad y la fecha del dato publicado. La información se actualiza a medida que llegan nuevos aportes. Úsala como herramienta de búsqueda, consulta y colaboración ciudadana.",
   },
   en: {
     appName: "HelpMap VE", tagline: "Humanitarian OSINT",
@@ -484,7 +533,7 @@ export const T: Record<Lang, Strings> = {
     female: "Female", male: "Male", ci: "ID (CI)", edad: "Age", sexo: "Sex", ubic: "Center", type: "Type",
     municipality: "Municipality", state: "State", verified: "Verified", verifiedYes: "Verified", verifiedNo: "Unverified",
     updated: "Updated", share: "Share", seeMap: "See on map", detailTitle: "Person record",
-    reportTitle: "Upload information", whatsapp: "WhatsApp", call: "Call",
+    reportTitle: "Add data", whatsapp: "WhatsApp", call: "Call",
     noPatientsHere: "No people registered at this center yet.",
     donationInfo: "Donation centre · contact information",
     staleData: "Data may be out of date (offline)",
@@ -514,15 +563,17 @@ export const T: Record<Lang, Strings> = {
     igCopied: "Link copied. Paste it in your Instagram story or profile.",
     noteMinors: "Minors' information is strictly protected: we never show their photos. Full visibility is limited exclusively to medical staff and family members.",
     f_address: "Search by name or address", geoSearch: "Search", geoSearching: "Searching…",
-    geoFound: "Location found — verify the pin on the map", geoNotFound: "Not found. Try the center's name or enter lat/lng manually.",
+    geoFound: "Location found. Verify the pin on the map", geoNotFound: "Not found. Try the center's name or enter lat/lng manually.",
     geoHint: "Type the center's name (e.g. \"Hospital Central San Felipe\") or an address and tap Search. Always verify the pin.",
-    geoPick: "Several matches — pick the right one:",
+    geoPick: "Several matches, pick the right one:",
     photoBusy: "Processing photo…",
     photoError: "Couldn't process the image. Try another one.",
     removePhoto: "Remove photo",
     f_procedencia: "Home origin",
     f_procedenciaPh: "Neighborhood or area of origin",
     f_procedenciaHint: "Verification team only. Never shown publicly.",
+    f_dataDate: "Date of the data",
+    f_dataDateHint: "When is this information from? It may differ from today's date.",
     storyBuilding: "Generating image for your story…",
     storyShared: "Pick Instagram → Story and add the link sticker.",
     storyDownloaded: "We opened the image in a new tab: save it and upload it to your Instagram story.",
@@ -548,11 +599,11 @@ export const T: Record<Lang, Strings> = {
     volunteerSub:
       "HelpMap is a citizen effort built with health and rescue staff on the ground. The more data we can confirm, the faster we fill the map and the more families reunite.",
     volunteerAsk:
-      "Want to help? Message us with your profile and your information sources so we can grant you access. Every volunteer is vetted before being enabled — that's how we protect the accuracy of the data.",
+      "Want to help? Message us with your profile and your information sources so we can grant you access. Every volunteer is vetted before being enabled. That's how we protect the accuracy of the data.",
     volunteerWa: "Message us on WhatsApp",
     volunteerEmail: "Email us",
     volunteerWaMsg: "Hi, I'd like to volunteer with HelpMap VE. My profile is: (e.g. doctor, nurse, rescuer) ___. My information sources are: ___.",
-    volunteerEmailSubj: "I want to volunteer — HelpMap VE (profile and sources)",
+    volunteerEmailSubj: "I want to volunteer at HelpMap VE (profile and sources)",
     volunteerNote:
       "We vet every collaborator. Data is always confirmed with professionals before it's published.",
     donateJoin: "Helping with food or medicine?",
@@ -564,7 +615,7 @@ export const T: Record<Lang, Strings> = {
       "We're especially looking for verifiable data from Morón, San Felipe and Yaracuy state, and from more hospitals in the affected areas. Every contribution helps.",
     shareDisclosure:
       "HelpMap works so that only data confirmed in the field by health-center contacts reaches the app.",
-    trustLine: "Field-confirmed data. Our commitment is to be a truthful source — help us clarify it further.",
+    trustLine: "Field-confirmed data. Our commitment is to be a truthful source. Help us clarify it further.",
     trustCta: "Help out",
     contact: "Contact",
     contactTitle: "Write to us",
@@ -603,7 +654,7 @@ export const T: Record<Lang, Strings> = {
     volRevoke: "Revoke",
     volRevoked: "Access revoked.",
     volNone: "No volunteers yet.",
-    volReviewNote: "Your changes publish immediately. You're trusted team — act responsibly; access can be revoked at any time.",
+    volReviewNote: "Your changes publish immediately. You're trusted team, so act responsibly; access can be revoked at any time.",
     staffGuide: "View team guide",
     listTitle: "Upload list photo",
     listHint:
@@ -615,6 +666,8 @@ export const T: Record<Lang, Strings> = {
     listSentPartial: "{ok} of {total} sent. Retry the ones that failed.",
     listError: "Couldn't send the list. Try again.",
     listNote: "Note (optional)",
+    listDate: "Date of the data",
+    listDateHint: "When is this list from? It may differ from today's date.",
     tabDonations: "Donations",
     addDonation: "Add initiative",
     editDonation: "Edit initiative",
@@ -696,7 +749,7 @@ export const T: Record<Lang, Strings> = {
     f_volPhone: "Phone / WhatsApp (optional)",
     volSignupSend: "Send application",
     volSignupSending: "Sending…",
-    volSignupNote: "We verify every collaborator before enabling them — that's how we protect the data's accuracy.",
+    volSignupNote: "We verify every collaborator before enabling them. That's how we protect the data's accuracy.",
     volSignupReq: "Add your name and a valid email.",
     volSignupDoneTitle: "Application sent!",
     volSignupDoneBody: "Your account is created but inactive. Once an admin approves your application, you can sign in at /login with the email and password you chose.",
@@ -712,6 +765,39 @@ export const T: Record<Lang, Strings> = {
     volPassShort: "Password must be at least 6 characters.",
     volEmailTaken: "That email is already registered.",
     volReqWhy: "Why grant access / their sources",
+    fabCta: "Contribute",
+    menuReportTitle: "Report a missing person",
+    menuReportSub: "You're looking for someone not on the list",
+    menuContribTitle: "Add data",
+    menuContribSub: "You have info about someone at a center",
+    rmTitle: "Report a missing person",
+    rmIntro: "Tell us who you're looking for. The team will check the database and contact you if there's information. It is not published on the map.",
+    rmWho: "Who are you looking for?",
+    rmZona: "Last known area or center",
+    rmZonaPh: "e.g. Catia, Hospital Vargas…",
+    rmDesc: "Details (description, circumstances)",
+    rmDescPh: "Anything that helps identify or locate the person…",
+    rmReporter: "Your name",
+    rmContact: "Your contact (WhatsApp / email)",
+    rmContactHint: "So the team can reach you. Never shown publicly.",
+    rmSubmit: "Send report",
+    rmNote: "The team reviews every report and searches the database. We'll contact you if there's news.",
+    rmReqName: "Enter at least the person's first or last name.",
+    rmSent: "Report sent. Thank you.",
+    rmDoneTitle: "Report received",
+    rmDoneBody: "Thank you. The team will check the database and contact you through the details you left if there's information.",
+    rmDoneClose: "Got it",
+    tabReports: "Reports",
+    reportsNone: "No pending reports.",
+    newsPendingReports: "{n} missing-person reports",
+    reportMarkReviewed: "Reviewed",
+    reportCloseAction: "Close",
+    reportReporter: "Reported by",
+    reportZonaLabel: "Last area",
+    reportUpdated: "Report updated.",
+    updatedTitle: "Last updated",
+    cardDisclaimer:
+      "The data reflects the latest available record and its date. In an emergency there are multiple transfers: this list does not guarantee the person is still at that center, but it does guarantee the veracity and date of the published data. Information is updated as new contributions arrive. Use it as a tool for searching, consultation and citizen collaboration.",
   },
 };
 
