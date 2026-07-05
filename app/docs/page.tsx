@@ -14,6 +14,9 @@ export async function generateMetadata({ searchParams }: SearchParams): Promise<
       lang === "en"
         ? "HelpMap VE documentation: usage guide, roadmap, privacy and data handling. Coming soon."
         : "Documentación de HelpMap VE: guía de uso, roadmap, privacidad y manejo de datos. Próximamente.",
+    alternates: {
+      canonical: "/docs" + (lang === "en" ? "?lang=en" : ""),
+    },
   };
 }
 

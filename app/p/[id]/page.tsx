@@ -20,8 +20,21 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return {
     title,
     description,
-    openGraph: { title, description, type: "profile", siteName: "HelpMap Venezuela" },
-    twitter: { card: "summary_large_image", title, description },
+    alternates: {
+      canonical: `/p/${id}`,
+    },
+    openGraph: {
+      title,
+      description,
+      type: "profile",
+      siteName: "HelpMap Venezuela",
+      url: `/p/${id}`,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
   };
 }
 

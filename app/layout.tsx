@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,6 +14,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-T75QMEHWTP";
+
 const DESCRIPTION =
   "Base de datos verificada de personas afectadas por el terremoto en Caracas, La Guaira y Miranda, en constante actualización por personal médico en campo.";
 
@@ -21,6 +24,17 @@ export const metadata: Metadata = {
   applicationName: "HelpMap Venezuela",
   title: "HelpMap Venezuela",
   description: DESCRIPTION,
+  keywords: [
+    "helpmap",
+    "helpmap venezuela",
+    "personas desaparecidas venezuela",
+    "desaparecidos terremoto caracas",
+    "emergencia caracas la guaira",
+    "buscar personas venezuela",
+    "ayuda humanitaria venezuela",
+    "terremoto venezuela 2026",
+    "listado de heridos venezuela",
+  ],
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -57,6 +71,21 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Google Tag (gtag.js) */}
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_ID}');
+          `}
+        </Script>
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <ServiceWorkerRegister />

@@ -17,12 +17,16 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
-  const doc = getDoc((await params).slug);
+  const { slug } = await params;
+  const doc = getDoc(slug);
   if (!doc) return { title: "HelpMap Venezuela" };
   const lang = pickLang((await searchParams).lang);
   return {
     title: `${tr(doc.title, lang)} · HelpMap Venezuela`,
     description: tr(doc.intro, lang),
+    alternates: {
+      canonical: `/docs/${slug}` + (lang === "en" ? "?lang=en" : ""),
+    },
   };
 }
 
