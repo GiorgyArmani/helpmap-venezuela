@@ -16,6 +16,7 @@ import {
   type Location,
   type LocationType,
   type PatientPublic,
+  type Refugio,
   type Rescatado,
   type RescatadoPublic,
   type Sexo,
@@ -23,7 +24,7 @@ import {
   type VzlaState,
 } from "./data";
 import { createClient } from "@/utils/supabase/client";
-import { enqueue, flushQueue, queueCount, type IntakeSubmission } from "./intakeQueue";
+import { flushQueue, queueCount } from "./intakeQueue";
 import { compressImage, LIST_OPTS } from "./uploadPhoto";
 import {
   copyText,
@@ -41,326 +42,38 @@ import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-type View = null | "detail" | "share" | "report" | "reportMissing" | "admin" | "donate" | "volunteer" | "contact" | "contribute" | "rescued";
-
-// External donation partners surfaced in the "Donar" panel.
-// Volunteer recruiting contact. ⚠️ Fill with the crew's real channel before
-// launch. Leave `whatsapp` empty to hide the WhatsApp button (digits only, no +).
-const VOLUNTEER = {
-  whatsapp: "", // e.g. "584120000000"
-  email: "info@helpmapvzla.net",
-};
-
-// Official Instagram — the brand/logo links here (main channel in Venezuela).
-const INSTAGRAM_HANDLE = "helpmapvzla";
-const INSTAGRAM_URL = "https://www.instagram.com/" + INSTAGRAM_HANDLE + "/";
-
-// Profiles we're recruiting — shown as a checklist in the volunteer panel.
-const VOLUNTEER_ROLES: { es: string; en: string }[] = [
-  { es: "Médicos y médicas", en: "Doctors" },
-  { es: "Enfermeros y enfermeras", en: "Nurses" },
-  { es: "Personal de salud", en: "Health workers" },
-  { es: "Rescatistas y Protección Civil", en: "Rescuers & Civil Protection" },
-  { es: "Con acceso a información veraz y de primera mano", en: "With access to truthful, first-hand information" },
-];
-
-// Profile options for the volunteer signup form's "perfil" select.
-const VOL_PROFILES: { value: string; es: string; en: string }[] = [
-  { value: "medico", es: "Médico/a", en: "Doctor" },
-  { value: "enfermero", es: "Enfermero/a", en: "Nurse" },
-  { value: "salud", es: "Personal de salud", en: "Health worker" },
-  { value: "rescate", es: "Rescatista / Protección Civil", en: "Rescuer / Civil Protection" },
-  { value: "otro", es: "Otro", en: "Other" },
-];
-
-type AdminTab = "novedades" | "centros" | "personas" | "voluntarios" | "listas" | "donaciones" | "rescatados" | "reportes";
-
-// One row of the activity/audit feed (db/audit_log.sql).
-type AuditEntry = {
-  id: string;
-  created_at: string;
-  actor_email: string | null;
-  actor_role: string | null;
-  action: string;
-  entity_type: string;
-  entity_id: string | null;
-  summary: string | null;
-};
-
-// A pending missing-person report (public "Reportar" flow → missing_reports table).
-type MissingReport = {
-  id: string;
-  apellidos: string;
-  nombres: string;
-  ci: string | null;
-  edad: number | null;
-  zona: string | null;
-  descripcion: string | null;
-  reporter_name: string | null;
-  reporter_contact: string | null;
-  status: string;
-  created_at: string;
-};
-
-// Human labels for each audit action (kept out of the big translations object).
-const AUDIT_LABEL: Record<string, { es: string; en: string }> = {
-  contribution_new: { es: "Nuevo aporte", en: "New contribution" },
-  contribution_approved: { es: "Aporte aprobado", en: "Contribution approved" },
-  contribution_rejected: { es: "Aporte rechazado", en: "Contribution rejected" },
-  patient_create: { es: "Alta de persona", en: "Person added" },
-  patient_update: { es: "Edición de persona", en: "Person edited" },
-  patient_status: { es: "Cambio de estatus", en: "Status changed" },
-  patient_verify: { es: "Persona verificada", en: "Person verified" },
-  patient_delete: { es: "Persona eliminada", en: "Person deleted" },
-  rescatado_create: { es: "Nuevo rescatado", en: "New rescued person" },
-  rescatado_update: { es: "Edición de rescatado", en: "Rescued edited" },
-  rescatado_promote: { es: "Rescatado trasladado", en: "Rescued transferred" },
-  rescatado_delete: { es: "Rescatado eliminado", en: "Rescued deleted" },
-  center_create: { es: "Centro agregado", en: "Center added" },
-  center_update: { es: "Centro editado", en: "Center edited" },
-  center_delete: { es: "Centro eliminado", en: "Center deleted" },
-  volunteer_apply: { es: "Nueva solicitud de voluntariado", en: "New volunteer application" },
-  volunteer_approved: { es: "Voluntario aprobado", en: "Volunteer approved" },
-  volunteer_rejected: { es: "Solicitud rechazada", en: "Application rejected" },
-};
-
-// Compact relative time ("hace 5 min"). App-runtime only (Date is fine here).
-function timeAgo(iso: string, lang: "es" | "en"): string {
-  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  const m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
-  if (lang === "es") {
-    if (s < 60) return "hace un momento";
-    if (m < 60) return `hace ${m} min`;
-    if (h < 24) return `hace ${h} h`;
-    return `hace ${d} d`;
-  }
-  if (s < 60) return "just now";
-  if (m < 60) return `${m}m ago`;
-  if (h < 24) return `${h}h ago`;
-  return `${d}d ago`;
-}
-type EditType = null | "center" | "person" | "donation" | "rescatado" | "promote";
-
-const CACHE_KEY = "helpmap:data:v4";
-// Bump the version when tour content changes so returning users see it once more.
-const TOUR_KEY = "helpmap:tour:v2";
-// Staff onboarding tour — stored in sessionStorage so it shows once per browser
-// session (reappears next session so volunteers get up to date again).
-const STAFF_TOUR_KEY = "helpmap:staff-tour";
-
-interface Draft {
-  // center
-  canonical_name?: string;
-  type?: LocationType;
-  state?: VzlaState;
-  municipality?: string;
-  lat?: string;
-  lng?: string;
-  // person
-  apellidos?: string;
-  nombres?: string;
-  ci?: string;
-  edad?: string;
-  sexo?: Sexo;
-  location_id?: string;
-  estatus?: Estatus;
-  verified?: boolean;
-  // donation
-  don_name?: string;
-  don_desc?: string;
-  don_social?: string;
-  don_url?: string;
-  don_info?: string;
-  // rescatado (field rescued report) — admin-only free-text + explicit minor toggle
-  is_minor?: boolean;
-  contacto?: string;
-  rescue_site?: string;
-  notas?: string;
-}
-
-interface AuthUser {
-  email: string | null;
-}
-
-export interface HelpMapProps {
-  accent?: string;
-  mapLabels?: boolean;
-  showReport?: boolean;
-}
-
-// Structural type shared by patients and rescatados — both carry these fields and the
-// same minor-photo rules, so Avatar/initials work for either.
-type PersonLike = { nombres: string; apellidos: string; foto_url: string | null; is_minor: boolean };
-
-const initials = (p: PersonLike) =>
-  ((p.nombres[0] || "") + (p.apellidos[0] || "")).toUpperCase() || "··";
-
-function Avatar({ p, cls }: { p: PersonLike; cls: string }) {
-  // Never render a photo for a minor, even if a foto_url somehow arrives (the
-  // data is already stripped by protectMinor; this is the last line of defense).
-  if (p.foto_url && !p.is_minor) {
-    return (
-      <div className={cls}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={p.foto_url} alt="" loading="lazy" decoding="async" />
-      </div>
-    );
-  }
-  return <div className={cls}>{initials(p)}</div>;
-}
-
-const ICON = {
-  back: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="m14 6-6 6 6 6" />
-    </svg>
-  ),
-  share: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="18" cy="5" r="2.6" />
-      <circle cx="6" cy="12" r="2.6" />
-      <circle cx="18" cy="19" r="2.6" />
-      <path d="m8.4 13.4 7.2 4.2M15.6 6.4 8.4 10.6" />
-    </svg>
-  ),
-  pin: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z" />
-      <circle cx="12" cy="10" r="2.4" />
-    </svg>
-  ),
-  chevR: (
-    <svg className="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="m9 6 6 6-6 6" />
-    </svg>
-  ),
-  chevD: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  ),
-  plus: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  ),
-  edit: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
-  ),
-  trash: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-    </svg>
-  ),
-  check: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  ),
-  wifiOff: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 1l22 22M16.7 11.3A6 6 0 0 0 12 9M5 12.5a10 10 0 0 1 4-2.3M8.5 16.4a4 4 0 0 1 5 0M12 20h.01" />
-    </svg>
-  ),
-  rescue: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 3v18M3 12h18M7.5 7.5l9 9M16.5 7.5l-9 9" />
-    </svg>
-  ),
-  wa: (
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-3.9-4.7-4.1-.1-.2-1-1.4-1-2.6s.6-1.8.9-2.1c.2-.2.5-.3.6-.3h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2.1.4 0 .5l-.4.5c-.1.2-.3.3-.1.6.1.3.7 1.1 1.4 1.7.9.8 1.6 1 1.9 1.2.2.1.4.1.5-.1l.6-.7c.2-.2.3-.2.6-.1l1.8.9c.3.1.4.2.5.3 0 .1 0 .6-.2 1Z" />
-    </svg>
-  ),
-  phone: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" />
-    </svg>
-  ),
-  flame: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2s4 3.5 4 8a4 4 0 0 1-8 0c0-1 .3-2 .8-2.7C8 9 8.5 11 10 11c0-3 2-5 2-9Z" />
-      <path d="M12 22a6 6 0 0 0 6-6c0-2-1-4-2.5-5.3" />
-    </svg>
-  ),
-  mail: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="m3 7 9 6 9-6" />
-    </svg>
-  ),
-  ig: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="5" />
-      <circle cx="12" cy="12" r="4" />
-      <path d="M17.5 6.5h.01" />
-    </svg>
-  ),
-  copy: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="11" height="11" rx="2" />
-      <path d="M5 15V5a2 2 0 0 1 2-2h8" />
-    </svg>
-  ),
-  // Hand offering a heart — volunteer / help.
-  volunteer: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 14.5 8.8 12.4a1.7 1.7 0 0 1 2.4-2.4l1 1 1-1a1.7 1.7 0 0 1 2.4 2.4L13 14.5a1.4 1.4 0 0 1-2 0Z" />
-      <path d="M3 13a2 2 0 0 1 2-2h1.5l3 2.6a2 2 0 0 0 1.3.5H15a1.5 1.5 0 0 1 0 3h-3" />
-      <path d="M3 13v6h2.5l5.5 1.5 8-2.5a1.7 1.7 0 0 0-1.2-3.1" />
-    </svg>
-  ),
-  search: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
-    </svg>
-  ),
-};
-
-// Map a Nominatim address (or the display label as fallback) to one of our VzlaState
-// enum values. Only returns a value when it matches a state we support — otherwise
-// null, so we never set an invalid enum on the draft. Handles common variants:
-// "Estado/Edo." prefixes, "Vargas" (old name of La Guaira), "Capital District".
-const STATE_FROM_LABEL: Array<[VzlaState, string[]]> = [
-  ["distrito_capital", ["distrito capital", "capital district", "dtto capital"]],
-  ["la_guaira", ["la guaira", "vargas"]],
-  ["miranda", ["miranda"]],
-  ["yaracuy", ["yaracuy"]],
-  ["falcon", ["falcon"]],
-  ["carabobo", ["carabobo"]],
-  ["aragua", ["aragua"]],
-];
-function veStateFromAddress(address?: Record<string, string>, label?: string): VzlaState | null {
-  const candidates = [
-    address?.state,
-    address?.state_district,
-    address?.region,
-    // last resort: scan the display label, which usually contains "Estado X".
-    label,
-  ]
-    .filter(Boolean)
-    .map((s) => norm(s as string).replace(/^(estado|edo\.?)\s+/, ""));
-  for (const c of candidates) {
-    for (const [enumVal, needles] of STATE_FROM_LABEL) {
-      if (needles.some((n) => c.includes(n))) return enumVal;
-    }
-  }
-  return null;
-}
-
-// Pick the best "municipio" from a Nominatim address and strip the "Municipio " prefix
-// so we store just the name (e.g. "Municipio San Felipe" → "San Felipe").
-function municipalityFromAddress(address?: Record<string, string>): string | null {
-  if (!address) return null;
-  const raw = address.municipality || address.county || address.city_district || address.city || "";
-  const cleaned = raw.replace(/^(municipio|mcpio\.?|mun\.?)\s+/i, "").trim();
-  return cleaned || null;
-}
+import { ICON } from "./icons";
+import { Avatar } from "./Avatar";
+import { RescuedView } from "./RescuedView";
+import { RefugiosView } from "./RefugiosView";
+import { ShareView } from "./ShareView";
+import { DonateView } from "./DonateView";
+import { DetailView } from "./DetailView";
+import { ReportMissingView } from "./ReportMissingView";
+import { ContactView } from "./ContactView";
+import { ContributeView } from "./ContributeView";
+import { VolunteerView } from "./VolunteerView";
+import { ReportView } from "./ReportView";
+import { timeAgo, veStateFromAddress, municipalityFromAddress } from "./helpers";
+import {
+  INSTAGRAM_HANDLE,
+  INSTAGRAM_URL,
+  VOL_PROFILES,
+  AUDIT_LABEL,
+  CACHE_KEY,
+  TOUR_KEY,
+  STAFF_TOUR_KEY,
+} from "./constants";
+import type {
+  View,
+  AdminTab,
+  AuditEntry,
+  MissingReport,
+  EditType,
+  Draft,
+  AuthUser,
+  HelpMapProps,
+} from "./types";
 
 export default function HelpMap({ accent, mapLabels = true, showReport = true }: HelpMapProps) {
   const [lang, setLang] = useState<Lang>("es");
@@ -388,8 +101,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [patients, setPatients] = useState<PatientPublic[]>([]);
   const [donations, setDonations] = useState<Donation[]>([]);
   const [rescatados, setRescatados] = useState<RescatadoPublic[]>([]); // rescued, not yet transferred (no map pin)
+  const [refugios, setRefugios] = useState<Refugio[]>([]); // shelter needs/donations info (companion to shelter locations)
   const [rescAdmin, setRescAdmin] = useState<Rescatado[]>([]); // staff-only full base rows for the admin tab
-  const [openDon, setOpenDon] = useState<string | null>(null); // foldable donation cards (accordion)
   const [stale, setStale] = useState(false);
   const [maintenance, setMaintenance] = useState(false); // site-wide maintenance banner (admin toggle, app_settings)
   const [maintBusy, setMaintBusy] = useState(false);
@@ -415,17 +128,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [volBusy, setVolBusy] = useState(false);
 
   // Public volunteer signup (in the "Súmate al voluntariado" panel)
-  const [vsName, setVsName] = useState("");
-  const [vsEmail, setVsEmail] = useState("");
-  const [vsPass, setVsPass] = useState("");
-  const [vsProfile, setVsProfile] = useState("");
-  const [vsSources, setVsSources] = useState("");
-  const [vsPhone, setVsPhone] = useState("");
-  const [vsBusy, setVsBusy] = useState(false);
-  const [vsDone, setVsDone] = useState(false);
-  const [vsOpen, setVsOpen] = useState(false); // toggles the form open in the panel
-  const [vsHp, setVsHp] = useState(""); // anti-spam honeypot (see /api/volunteers/apply)
-  const vsOpenedAt = useRef(0);
   const [listBusy, setListBusy] = useState(false);
   const [listNote, setListNote] = useState("");
   const [listLoc, setListLoc] = useState("");
@@ -435,31 +137,15 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [listProgress, setListProgress] = useState<{ done: number; total: number } | null>(null);
 
   // Public "write to us" form (in-app email + image attachments)
-  const [cName, setCName] = useState("");
-  const [cEmail, setCEmail] = useState("");
-  const [cMsg, setCMsg] = useState("");
-  const [cImgs, setCImgs] = useState<string[]>([]);
-  const [cBusy, setCBusy] = useState(false);
-  const [cDone, setCDone] = useState(false); // shows the "we got your message" confirmation panel
   // Contribution-photo publish confirmation (in-app modal, not window.confirm): holds
   // the pending contribution id when approving a photo onto an already-verified record.
   const [pubConfirm, setPubConfirm] = useState<string | null>(null);
   // Why the user is writing: drives the email subject + form copy. The contact form
   // is only reached from the volunteer / donations CTAs (no generic contact entry).
   const [contactKind, setContactKind] = useState<"volunteer" | "donation" | "contact">("contact");
-  // Anti-spam (zero-friction): a honeypot field a human never sees/fills, and the
-  // moment the form opened so the server can reject instant (bot) submissions.
-  const [cHp, setCHp] = useState("");
-  const contactOpenedAt = useRef(0);
 
   // Public "Aportar foto / info" on an existing record (→ contributions moderation
   // queue, NOT the intake funnel — intake is for people not yet in the system).
-  const [cbPhoto, setCbPhoto] = useState<string | null>(null); // compressed JPEG (adults only)
-  const [cbPhotoBusy, setCbPhotoBusy] = useState(false);
-  const [cbDesc, setCbDesc] = useState("");
-  const [cbContact, setCbContact] = useState("");
-  const [cbBusy, setCbBusy] = useState(false);
-  const [cbDone, setCbDone] = useState(false); // shows the "thanks, under review" panel
   // Staff review queue (admin/volunteer)
   const [contribs, setContribs] = useState<
     { id: string; patient_id: string; patient_name: string; foto_url: string | null; descripcion: string | null; contacto: string | null }[]
@@ -468,32 +154,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [audit, setAudit] = useState<AuditEntry[]>([]);
 
   // Public intake form + offline queue
-  const [rNom, setRNom] = useState("");
-  const [rApe, setRApe] = useState("");
-  const [rCi, setRCi] = useState("");
-  const [rEdad, setREdad] = useState("");
-  const [rMinor, setRMinor] = useState(false);
-  const [rLoc, setRLoc] = useState("");
-  const [rEstatus, setREstatus] = useState<Estatus>("INGRESADO");
-  const [rSexo, setRSexo] = useState<"M" | "F" | "">("");
-  const [rProcedencia, setRProcedencia] = useState("");
-  const [rDataDate, setRDataDate] = useState(""); // date the info corresponds to (yyyy-mm-dd), optional
-  const [rContact, setRContact] = useState("");
-  const [rPhoto, setRPhoto] = useState<string | null>(null); // compressed JPEG data URL (adults only)
-  const [rPhotoBusy, setRPhotoBusy] = useState(false);
   // FAB "+" menu (Reportar desaparecido / Aportar datos).
   const [fabOpen, setFabOpen] = useState(false);
   // Report-a-missing-person form (the public "Reportar" flow → /api/reports).
-  const [rmApe, setRmApe] = useState("");
-  const [rmNom, setRmNom] = useState("");
-  const [rmCi, setRmCi] = useState("");
-  const [rmEdad, setRmEdad] = useState("");
-  const [rmZona, setRmZona] = useState("");
-  const [rmDesc, setRmDesc] = useState("");
-  const [rmReporter, setRmReporter] = useState("");
-  const [rmContact, setRmContact] = useState("");
-  const [rmBusy, setRmBusy] = useState(false);
-  const [rmDone, setRmDone] = useState(false);
   const [pending, setPending] = useState(() => (typeof window !== "undefined" ? queueCount() : 0));
   const [tourOpen, setTourOpen] = useState(false);
   const [staffTourOpen, setStaffTourOpen] = useState(false);
@@ -525,6 +188,65 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     locations.forEach((l) => (m[l.location_id] = l));
     return m;
   }, [locations]);
+
+  // Shelter needs/donations info, keyed by the shared location_id.
+  const refugioById = useMemo(() => {
+    const m: Record<string, Refugio> = {};
+    refugios.forEach((r) => (m[r.location_id] = r));
+    return m;
+  }, [refugios]);
+
+  // Reconcile refugios against existing "real" centers. AcopioVE lists some hospitals as
+  // refuges, so a refugio can land on top of a hospital already in `locations` → two
+  // stacked pins (the bug). If a refugio sits within ~130m of a NON-refugio location, it's
+  // "shadowed": we drop its own pin + dropdown entry and surface its needs on that center.
+  const { shadowedRefugios, needsForCenter } = useMemo(() => {
+    const shadowed = new Set<string>();
+    const needs: Record<string, Refugio> = {};
+    const refLocs = locations.filter((l) => refugioById[l.location_id]);
+    const realLocs = locations.filter((l) => !refugioById[l.location_id]);
+    const M_PER_DEG = 111320;
+    for (const rl of refLocs) {
+      let best: { id: string; d: number } | null = null;
+      for (const cl of realLocs) {
+        const dLat = (rl.lat - cl.lat) * M_PER_DEG;
+        const dLng = (rl.lng - cl.lng) * M_PER_DEG * Math.cos((rl.lat * Math.PI) / 180);
+        const d = Math.hypot(dLat, dLng);
+        if (d <= 130 && (!best || d < best.d)) best = { id: cl.location_id, d };
+      }
+      if (best) {
+        shadowed.add(rl.location_id);
+        // If several refugios map to the same center, keep the nearest one's needs.
+        const prev = needs[best.id];
+        if (!prev) needs[best.id] = refugioById[rl.location_id];
+      }
+    }
+    return { shadowedRefugios: shadowed, needsForCenter: needs };
+  }, [locations, refugioById]);
+
+  // Locations that get a map pin — shadowed refugios are merged onto their coincident
+  // center, so they don't stack a duplicate pin.
+  const mapLocations = useMemo(
+    () => locations.filter((l) => !shadowedRefugios.has(l.location_id)),
+    [locations, shadowedRefugios],
+  );
+
+  // Refugio needs list (the "cómo colaborar" surface). Join each refugio to its location
+  // for name/place/coords/contacts, honor the current state filter, and rank the ones
+  // that reported needs first so the most actionable rise to the top.
+  const refugioNeeds = useMemo(() => {
+    const score = (r: Refugio) => (r.necesita ? 2 : 0) + (r.recibe.length ? 1 : 0);
+    return refugios
+      .map((r) => ({ r, loc: locById[r.location_id] }))
+      .filter(
+        (x): x is { r: Refugio; loc: Location } =>
+          !!x.loc &&
+          (stateF === "all" || x.loc.state === stateF) &&
+          (!!x.r.necesita || x.r.recibe.length > 0), // only actionable rows → matches the bar
+      )
+      .sort((a, b) => score(b.r) - score(a.r) || a.loc.canonical_name.localeCompare(b.loc.canonical_name));
+  }, [refugios, locById, stateF]);
+  const needyCount = refugioNeeds.length;
 
   // Data-driven list of states present in the loaded locations (CLAUDE.md §13).
   const statesAvailable = useMemo(() => {
@@ -644,6 +366,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             patients?: PatientPublic[];
             donations?: Donation[];
             rescatados?: RescatadoPublic[];
+            refugios?: Refugio[];
           };
           if (Array.isArray(c.locations)) {
             setLocations(c.locations);
@@ -654,6 +377,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           if (Array.isArray(c.patients)) setPatients(c.patients.map(protectMinor));
           if (Array.isArray(c.donations)) setDonations(c.donations);
           if (Array.isArray(c.rescatados)) setRescatados(c.rescatados.map(protectMinorRescatado));
+          if (Array.isArray(c.refugios)) setRefugios(c.refugios);
         }
       } catch {
         /* ignore */
@@ -682,7 +406,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           }
           return { data: all, error: null };
         };
-        const [locRes, patRes, donRes, setRes, rescRes] = await Promise.all([
+        const [locRes, patRes, donRes, setRes, rescRes, refRes] = await Promise.all([
           supabase.from("locations").select("*").eq("active", true),
           // Reads the privacy-filtered VIEW, never the base table (CLAUDE.md §2).
           fetchAll("patients_public", "updated_at"),
@@ -691,6 +415,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           supabase.from("app_settings").select("maintenance").eq("id", 1).maybeSingle(),
           // Rescued (not-yet-transferred) people — privacy-filtered VIEW, non-critical.
           fetchAll("rescatados_public", "created_at"),
+          // Shelter needs/donations info — non-critical; tolerate the table not existing yet.
+          supabase.from("refugios").select("*"),
         ]);
         if (cancelled) return;
         if (locRes.error) throw locRes.error;
@@ -702,6 +428,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         const dons = donRes.error ? null : ((donRes.data ?? []) as Donation[]);
         // Rescatados are non-critical too (table may not exist yet). Minor-protected.
         const resc = rescRes.error ? null : ((rescRes.data ?? []) as RescatadoPublic[]).map(protectMinorRescatado);
+        // Refugios are non-critical (table may not exist yet); no privacy filter needed.
+        const refs = refRes.error ? null : ((refRes.data ?? []) as Refugio[]);
         const locs = (locRes.data ?? []) as Location[];
         // Defense in depth: enforce minor protection on every record from the
         // view before it touches state or the cache (CLAUDE.md §2).
@@ -710,9 +438,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         setPatients(pats);
         if (dons) setDonations(dons);
         if (resc) setRescatados(resc);
+        if (refs) setRefugios(refs);
         setStale(false);
         try {
-          const cached = JSON.stringify({ locations: locs, patients: pats, donations: dons ?? donations, rescatados: resc ?? rescatados });
+          const cached = JSON.stringify({ locations: locs, patients: pats, donations: dons ?? donations, rescatados: resc ?? rescatados, refugios: refs ?? refugios });
           localStorage.setItem(CACHE_KEY, cached);
         } catch {
           /* storage full — non-fatal */
@@ -791,7 +520,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   }, [onMarker]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mkIcon = (L: any, count: number, color: string, active: boolean, dim: boolean) =>
+  const mkIcon = (L: any, count: number | string, color: string, active: boolean, dim: boolean) =>
     L.divIcon({
       className: "mkwrap",
       html:
@@ -813,14 +542,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     const L = window.L;
     const map = mapRef.current;
     const markers = markersRef.current;
-    const ids = new Set(locations.map((l) => l.location_id));
+    const ids = new Set(mapLocations.map((l) => l.location_id));
     Object.keys(markers).forEach((id) => {
       if (!ids.has(id)) {
         map.removeLayer(markers[id]);
         delete markers[id];
       }
     });
-    locations.forEach((l) => {
+    mapLocations.forEach((l) => {
       if (!markers[l.location_id]) {
         const m = L.marker([l.lat, l.lng], { icon: mkIcon(L, 0, TYPE_META[l.type].color, false, false) }).addTo(map);
         m.on("click", () => onMarkerRef.current(l.location_id));
@@ -829,27 +558,33 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         markers[l.location_id].setLatLng([l.lat, l.lng]);
       }
     });
-  }, [mapReady, locations]);
+  }, [mapReady, mapLocations]);
 
   // Update marker icons when filters/data change.
   useEffect(() => {
     if (!mapReady || !mapRef.current || !window.L) return;
     const markers = markersRef.current;
     const L = window.L;
-    locations.forEach((l) => {
+    mapLocations.forEach((l) => {
       const m = markers[l.location_id];
       if (!m) return;
       const all = patients.filter((p) => p.location_id === l.location_id);
       const vis = all.filter((p) => tsMatch(p));
       const active = locationSel === l.location_id || focusId === l.location_id;
-      const dim = vis.length === 0;
+      // A refugio (AcopioVE) is an info/needs point, not a patient tracker. With no
+      // patients it must NOT dim or show a bare "0" (that reads as "nobody / closed");
+      // show a heart glyph so it stays a live "help point". A center that ALSO carries
+      // merged refugio needs keeps its patient count (it's a real center first).
+      const isRefugio = !!refugioById[l.location_id];
+      const dim = vis.length === 0 && !isRefugio;
       // Pin color reflects the location TYPE (hospital/shelter/morgue/acopio), not the
       // worst patient status — so the count badge reads as data, not as a death toll.
       const color = TYPE_META[l.type].color;
-      m.setIcon(mkIcon(L, vis.length, color, active, dim));
+      const label = vis.length === 0 && isRefugio ? "&#9829;" : vis.length;
+      m.setIcon(mkIcon(L, label, color, active, dim));
       m.setZIndexOffset(active ? 1000 : dim ? -100 : 0);
     });
-  }, [mapReady, locations, patients, tsMatch, locationSel, focusId]);
+  }, [mapReady, mapLocations, patients, tsMatch, locationSel, focusId, refugioById]);
 
   // ---- Damage data: live from USGS FDSN, seed fallback (see usgsQuake.ts) ----
   useEffect(() => {
@@ -938,60 +673,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const selLoc = selP ? locById[selP.location_id] : null;
 
   // ---- Contribute photo/info to THIS record (public → moderation queue) -------
-  const openContribute = () => {
-    setCbPhoto(null);
-    setCbDesc("");
-    setCbContact("");
-    setCbDone(false);
-    setView("contribute");
-  };
-  const onPickContribPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (selP?.is_minor) return; // never a photo for a minor (CLAUDE.md §2)
-    setCbPhotoBusy(true);
-    try {
-      setCbPhoto(await compressImage(file));
-    } catch {
-      showToast(t.photoError);
-    } finally {
-      setCbPhotoBusy(false);
-    }
-  };
-  const submitContribution = async () => {
-    if (!selP) return;
-    const desc = cbDesc.trim();
-    const photo = selP.is_minor ? null : cbPhoto; // defensive: minors never carry a photo
-    if (!photo && !desc) {
-      showToast(t.contribReq);
-      return;
-    }
-    setCbBusy(true);
-    try {
-      let foto_url: string | null = null;
-      if (photo) {
-        // Private bucket → returns an object PATH (not a public URL). A pending
-        // contribution photo must never be publicly reachable until approved (§2).
-        const { uploadContributionPhoto } = await import("./uploadPhoto");
-        foto_url = await uploadContributionPhoto(photo);
-      }
-      const res = await fetch("/api/contributions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patient_id: selP.id, foto_url, descripcion: desc || null, contacto: cbContact.trim() || null }),
-      });
-      if (res.ok) {
-        setCbDone(true);
-      } else {
-        showToast(t.saveError);
-      }
-    } catch {
-      showToast(t.saveError);
-    } finally {
-      setCbBusy(false);
-    }
-  };
+  // Form state lives in ContributeView; opening just switches the view (fresh on mount).
+  const openContribute = () => setView("contribute");
   const loadContributions = useCallback(async () => {
     try {
       const res = await fetch("/api/contributions");
@@ -1161,6 +844,27 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     }
   };
 
+  // Share a shelter's NEED into WhatsApp/native share — the core "promptear a colaborar"
+  // action so a specific need reaches people who can act on it (CLAUDE.md §5, focus:
+  // visibilizar necesidades). Links to the map location so anyone can go help.
+  const shareRefugio = async (loc: Location, r: Refugio) => {
+    const needs = r.necesita?.trim() || (r.recibe.length ? r.recibe.join(", ") : "");
+    const where = [loc.municipality, STATE_LABEL[loc.state]].filter(Boolean).join(", ");
+    const url = mapsDirectionsUrl(loc.lat, loc.lng);
+    const text =
+      `🆘 ${loc.canonical_name}${where ? " · " + where : ""} necesita ayuda` +
+      (needs ? `:\n${needs}` : "") +
+      `\n${t.refShareTag}`;
+    const touch =
+      typeof window !== "undefined" &&
+      (window.matchMedia?.("(pointer: coarse)").matches || (navigator.maxTouchPoints ?? 0) > 0);
+    if (touch) {
+      const ok = await nativeShare({ title: loc.canonical_name, text, url });
+      if (ok) return;
+    }
+    openShare(whatsappUrl(url, text));
+  };
+
   const centroidForState = (st: VzlaState): [number, number] | null => {
     const ls = locations.filter((l) => l.state === st);
     if (!ls.length) return null;
@@ -1196,126 +900,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     flyTo(locById[selP.location_id]);
   };
 
-  const resetReport = () => {
-    setRNom("");
-    setRApe("");
-    setRCi("");
-    setREdad("");
-    setRMinor(false);
-    setRLoc("");
-    setREstatus("INGRESADO");
-    setRSexo("");
-    setRProcedencia("");
-    setRDataDate("");
-    setRContact("");
-    setRPhoto(null);
-    setRPhotoBusy(false);
-  };
-
-  // Compress the picked image in-browser. Refuses for minors (no photo ever,
-  // CLAUDE.md §2/§5) — defensive even though the field is hidden for minors.
-  const onPickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-picking the same file
-    if (!file) return;
-    if (rMinor) return;
-    setRPhotoBusy(true);
-    try {
-      setRPhoto(await compressImage(file));
-    } catch {
-      showToast(t.photoError);
-    } finally {
-      setRPhotoBusy(false);
-    }
-  };
-
-  // Submit goes to the offline queue first, then we try to flush it to n8n.
-  // It never writes to the DB — it's "received for review" (CLAUDE.md §7).
-  const submitReport = async () => {
-    if ((!rNom.trim() && !rApe.trim()) || !rLoc) {
-      showToast(t.reqNameLoc);
-      return;
-    }
-    const edadNum = rEdad ? parseInt(rEdad) : null;
-    const isMinor = rMinor || (edadNum != null && edadNum < 18);
-    const loc = locById[rLoc];
-    const sub: IntakeSubmission = {
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "i_" + Date.now(),
-      createdAt: new Date().toISOString(),
-      apellidos: rApe.trim(),
-      nombres: rNom.trim(),
-      ci: isMinor ? "MENOR" : rCi.trim() || "—",
-      is_minor: isMinor,
-      edad: edadNum,
-      sexo: rSexo || null,
-      location_id: rLoc,
-      location_name: loc?.canonical_name ?? "",
-      estatus: rEstatus,
-      procedencia: rProcedencia.trim() || null,
-      data_date: rDataDate || null,
-      contacto: rContact.trim() || null,
-      lang,
-      source: "web",
-      // Adults only — never attach a photo for a minor (CLAUDE.md §2/§5).
-      // foto_b64 is the local image; the upload turns it into foto_url (a URL).
-      foto_b64: isMinor ? null : rPhoto,
-      foto_url: null,
-    };
-    enqueue(sub);
-    resetReport();
-    setView(null);
-    const online = typeof navigator === "undefined" ? true : navigator.onLine;
-    if (online) {
-      const r = await flushQueue();
-      setPending(queueCount());
-      showToast(r.sent > 0 ? t.sent : t.queuedOffline);
-    } else {
-      setPending(queueCount());
-      showToast(t.queuedOffline);
-    }
-  };
 
   // ---- Report a missing person (public "Reportar" flow → /api/reports) ----
   // NOT the intake funnel: this is a lead/request the team works from the admin
   // "Reportes" tab (+ an email). Never published on the map (CLAUDE.md §14).
-  const resetReportMissing = () => {
-    setRmApe(""); setRmNom(""); setRmCi(""); setRmEdad("");
-    setRmZona(""); setRmDesc(""); setRmReporter(""); setRmContact("");
-  };
-  const submitReportMissing = async () => {
-    if (!rmApe.trim() && !rmNom.trim()) {
-      showToast(t.rmReqName);
-      return;
-    }
-    setRmBusy(true);
-    try {
-      const res = await fetch("/api/reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apellidos: rmApe.trim(),
-          nombres: rmNom.trim(),
-          ci: rmCi.trim() || null,
-          edad: rmEdad.trim() || null,
-          zona: rmZona.trim() || null,
-          descripcion: rmDesc.trim() || null,
-          reporter_name: rmReporter.trim() || null,
-          reporter_contact: rmContact.trim() || null,
-        }),
-      });
-      if (res.ok) {
-        resetReportMissing();
-        setRmDone(true);
-      } else {
-        showToast(t.saveError);
-      }
-    } catch {
-      showToast(t.saveError);
-    } finally {
-      setRmBusy(false);
-    }
-  };
-
   // ---- Admin / draft -----------------------------------------------------
   const setD =
     (k: keyof Draft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -1345,6 +933,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setEditId(l.location_id);
     setGeoQuery("");
     setGeoResults([]);
+    const r = refugioById[l.location_id];
     setDraft({
       canonical_name: l.canonical_name,
       type: l.type,
@@ -1352,6 +941,13 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       municipality: l.municipality ?? "",
       lat: String(l.lat),
       lng: String(l.lng),
+      // refugio companion info (if any) → editable form fields
+      ref_recibe: r ? r.recibe.join(", ") : "",
+      ref_necesita: r?.necesita ?? "",
+      ref_horario: r?.horario ?? "",
+      ref_responsable: r?.responsable ?? "",
+      ref_address: r?.address ?? "",
+      ref_animal: r?.es_animal ?? false,
     });
   };
   const newCenter = () => {
@@ -1359,7 +955,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setEditId(null);
     setGeoQuery("");
     setGeoResults([]);
-    setDraft({ canonical_name: "", type: "hospital", state: "distrito_capital", municipality: "", lat: "", lng: "" });
+    setDraft({ canonical_name: "", type: "hospital", state: "distrito_capital", municipality: "", lat: "", lng: "", ref_recibe: "", ref_necesita: "", ref_horario: "", ref_responsable: "", ref_address: "", ref_animal: false });
   };
 
   // Geocode by NAME or address via OpenStreetMap Nominatim (free, no key — same
@@ -1456,6 +1052,32 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     });
   };
 
+  // Suggest a shelter's updated needs back to AcopioVE (POST /submissions via our server
+  // route). Best-effort + server-gated (ACOPIOVE_PUSH_ENABLED) so nothing goes to a third
+  // party until the team enables it. It's a moderated suggestion, not an instant write.
+  const pushRefugioToAcopio = (loc: Location, r: Refugio) => {
+    fetch("/api/refugios/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        external_id: r.external_id,
+        name: loc.canonical_name,
+        address: r.address,
+        ciudad: loc.municipality,
+        lat: loc.lat,
+        lng: loc.lng,
+        recibe: r.recibe,
+        necesita_ahora: r.necesita,
+        horario: r.horario,
+        contacto: loc.contact_whatsapp || loc.contact_phone,
+        responsable: r.responsable,
+        fuente: r.fuente,
+      }),
+    }).catch(() => {
+      /* disabled / offline — non-fatal */
+    });
+  };
+
   // Admin writes go to the BASE tables via the authenticated session (CLAUDE.md
   // §9). RLS must grant the authenticated role write access (see runbook).
   const saveCenter = async () => {
@@ -1491,6 +1113,44 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       return;
     }
     setLocations((ls) => (editId ? ls.map((l) => (l.location_id === obj.location_id ? obj : l)) : [...ls, obj]));
+    // Shelter needs (recibe/necesita/…) live in the companion `refugios` table. Upsert
+    // it whenever the center is a shelter so staff can keep each refugio's differing
+    // needs current (CLAUDE.md §14, AcopioVE). Non-fatal: the center already saved.
+    if (obj.type === "shelter") {
+      const existing = refugioById[obj.location_id];
+      const recibe = (d.ref_recibe || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const refRow: Refugio = {
+        location_id: obj.location_id,
+        recibe,
+        necesita: d.ref_necesita?.trim() || null,
+        horario: d.ref_horario?.trim() || null,
+        responsable: d.ref_responsable?.trim() || null,
+        fuente: existing?.fuente ?? null,
+        address: d.ref_address?.trim() || null,
+        external_id: existing?.external_id ?? null,
+        es_animal: !!d.ref_animal,
+        last_confirmed_at: existing?.last_confirmed_at ?? null,
+        // Stamp the local edit time: this is what freshest-wins compares against, so a
+        // staff edit here is never clobbered by the next AcopioVE sync (updated_at is
+        // app-managed — db/refugios.sql has no touch trigger).
+        updated_at: new Date().toISOString(),
+      };
+      const { error: refErr } = await getSupabase().from("refugios").upsert(refRow);
+      if (!refErr) {
+        setRefugios((rs) =>
+          rs.some((r) => r.location_id === refRow.location_id)
+            ? rs.map((r) => (r.location_id === refRow.location_id ? refRow : r))
+            : [...rs, refRow],
+        );
+        // Offer this update back to AcopioVE as a moderated suggestion (best-effort;
+        // no-ops unless the team enabled ACOPIOVE_PUSH_ENABLED). Both apps improve each
+        // other — whoever has the fresher data suggests it upstream (CLAUDE.md §14).
+        pushRefugioToAcopio(obj, refRow);
+      }
+    }
     notifyCenter(editId ? "updated" : "created", obj);
     clearEdit();
     showToast(t.savedC);
@@ -1506,6 +1166,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     }
     setLocations((ls) => ls.filter((l) => l.location_id !== id));
     setPatients((ps) => ps.filter((p) => p.location_id !== id));
+    setRefugios((rs) => rs.filter((r) => r.location_id !== id)); // DB cascades; mirror locally
     setLocationSel((cur) => (cur === id ? null : cur));
     notifyCenter("deleted", center ?? { location_id: id });
     clearEdit();
@@ -2026,55 +1687,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     }
   };
 
-  // Public: submit a volunteer application. The server creates a no-access account with
-  // the chosen password; an admin grants the role to unlock access.
-  const submitVolunteerSignup = async () => {
-    const email = vsEmail.trim();
-    if (!vsName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showToast(t.volSignupReq);
-      return;
-    }
-    if (vsPass.length < 6) {
-      showToast(t.volPassShort);
-      return;
-    }
-    setVsBusy(true);
-    try {
-      const res = await fetch("/api/volunteers/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre: vsName.trim(),
-          email,
-          password: vsPass,
-          perfil: vsProfile || null,
-          fuentes: vsSources.trim() || null,
-          telefono: vsPhone.trim() || null,
-          hp: vsHp,
-          elapsed: vsOpenedAt.current ? Date.now() - vsOpenedAt.current : undefined,
-        }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setVsDone(true);
-        setVsName("");
-        setVsEmail("");
-        setVsPass("");
-        setVsProfile("");
-        setVsSources("");
-        setVsPhone("");
-      } else if (j.error === "email_taken") {
-        showToast(t.volEmailTaken);
-      } else {
-        showToast(t.saveError);
-      }
-    } catch {
-      showToast(t.saveError);
-    } finally {
-      setVsBusy(false);
-    }
-  };
-
   // ---- List photo upload (staff): forward to n8n via /api/lists ----------
   const onPickList = async (e: React.ChangeEvent<HTMLInputElement>) => {
     // A single center usually arrives as MANY photos (multiple pages / handwritten
@@ -2132,66 +1744,30 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   };
 
   // ---- Volunteer / donation email (in-app, via nodemailer) ---------------
+  // Opens the "Escríbenos" form. The form state lives in ContactView; we only remember
+  // which `kind` opened it (passed as a prop, sent to /api/contact for the subject tag).
   const openContact = (kind: "volunteer" | "donation" | "contact") => {
     setContactKind(kind);
-    setCDone(false);
-    setCHp("");
-    contactOpenedAt.current = Date.now();
     setView("contact");
-  };
-  const onPickContactPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || cImgs.length >= 4) return;
-    try {
-      const b64 = await compressImage(file);
-      setCImgs((a) => (a.length >= 4 ? a : [...a, b64]));
-    } catch {
-      showToast(t.photoError);
-    }
-  };
-  const sendContact = async () => {
-    if (!cMsg.trim()) {
-      showToast(t.contactError);
-      return;
-    }
-    setCBusy(true);
-    try {
-      const res = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: contactKind,
-          name: cName.trim(),
-          email: cEmail.trim(),
-          message: cMsg.trim(),
-          images: cImgs,
-          // Anti-spam signals (see /api/contact): honeypot must stay empty; elapsed
-          // is how long the form was open — a real person takes seconds to type.
-          hp: cHp,
-          elapsed: contactOpenedAt.current ? Date.now() - contactOpenedAt.current : undefined,
-        }),
-      });
-      if (res.ok) {
-        // Show an in-form confirmation panel (more reassuring than a quick toast):
-        // it mirrors the auto-acknowledgment email the user also receives.
-        setCName("");
-        setCEmail("");
-        setCMsg("");
-        setCImgs([]);
-        setCDone(true);
-      } else {
-        showToast(t.contactError);
-      }
-    } catch {
-      showToast(t.contactError);
-    } finally {
-      setCBusy(false);
-    }
   };
 
   // ---- Derived view bits -------------------------------------------------
-  const centerFilterOpts = locations.filter((l) => stateF === "all" || l.state === stateF);
+  // Center dropdown. The team's "centros" INCLUDE the AcopioVE refugios, so they must be
+  // selectable here too — but grouped by TYPE (Hospitales / Refugios / …) so 48+ entries
+  // read as an organized list, not a flat blur. Excludes shadowed refugios (merged onto a
+  // hospital → no pin of their own, selecting one would fly nowhere). Honors the state filter.
+  const centerFilterGroups = useMemo(() => {
+    const inState = mapLocations.filter((l) => stateF === "all" || l.state === stateF);
+    const order: LocationType[] = ["hospital", "shelter", "morgue", "donation_centre"];
+    return order
+      .map((type) => ({
+        type,
+        items: inState
+          .filter((l) => l.type === type)
+          .sort((a, b) => a.canonical_name.localeCompare(b.canonical_name)),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [mapLocations, stateF]);
   const statusOpts: { v: Estatus; label: string }[] = ESTATUS_ORDER.map((k) => ({ v: k, label: SM[k][lang] }));
   const canDelete = !!(editType && editId) && isAdmin; // volunteers can't delete
 
@@ -2230,6 +1806,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const rootStyle = accent ? ({ ["--accent"]: accent } as React.CSSProperties) : undefined;
 
   const selStateLoc = locationSel ? locById[locationSel] : null;
+  // A selected center's needs card: its own refugio row, or a refugio merged onto it
+  // (a coincident AcopioVE hospital-refuge that we shadowed to avoid a duplicate pin).
+  const selRefugio = locationSel ? refugioById[locationSel] ?? needsForCenter[locationSel] ?? null : null;
   const showDonationInfo =
     !!selStateLoc && (selStateLoc.type === "donation_centre" || (list.length === 0 && !query && status === "all"));
 
@@ -2358,10 +1937,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             {ICON.pin}
             <select value={locationSel || "all"} onChange={onSelectCenter}>
               <option value="all">{t.allCenters}</option>
-              {centerFilterOpts.map((l) => (
-                <option key={l.location_id} value={l.location_id}>
-                  {l.canonical_name}
-                </option>
+              {centerFilterGroups.map((g) => (
+                <optgroup key={g.type} label={TYPE_META[g.type][lang]}>
+                  {g.items.map((l) => (
+                    <option key={l.location_id} value={l.location_id}>
+                      {l.canonical_name}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>
@@ -2442,7 +2025,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   role="menuitem"
                   onClick={() => {
                     setFabOpen(false);
-                    setRmDone(false);
                     setView("reportMissing");
                   }}
                 >
@@ -2528,6 +2110,99 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
               <span className="resc-cta">{ICON.chevR}</span>
             </button>
           )}
+          {/* Shelter needs entry bar: surfaces "N refugios necesitan ayuda" so needs are
+              visible without hunting pins, and prompts people to collaborate (user focus). */}
+          {!locationSel && needyCount > 0 && (
+            <button className="refbar" onClick={() => setView("refugios")}>
+              <span className="refbar-ic">{ICON.volunteer}</span>
+              <span className="refbar-txt">{t.refNeedBar.replace("{n}", String(needyCount))}</span>
+              <span className="refbar-cta">{ICON.chevR}</span>
+            </button>
+          )}
+          {/* Shelter needs card: for a selected refugio, show what it RECEIVES and
+              NEEDS now + contact actions (CLAUDE.md §14, AcopioVE integration). */}
+          {selRefugio && selStateLoc && (
+            <div className="refcard">
+              <div className="refhead">
+                <span className="refkick">{ICON.pin}{t.refShelterInfo}</span>
+                {selRefugio.es_animal && <span className="refanimal">{t.refAnimal}</span>}
+              </div>
+              {selRefugio.necesita && (
+                <div className="refneed">
+                  <span className="reflabel">{ICON.volunteer}{t.refNeeds}</span>
+                  <p className="refneedtxt">{selRefugio.necesita}</p>
+                </div>
+              )}
+              {selRefugio.recibe.length > 0 && (
+                <div className="refblock">
+                  <span className="reflabel">{ICON.box}{t.refReceives}</span>
+                  <div className="refchips">
+                    {selRefugio.recibe.map((r, i) => (
+                      <span key={i} className="refchip">{r.charAt(0).toUpperCase() + r.slice(1)}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(selRefugio.horario || selRefugio.responsable || selRefugio.address) && (
+                <div className="refmeta">
+                  {selRefugio.horario && (
+                    <span className="refmetarow">{ICON.clock}{t.refSchedule}: {selRefugio.horario}</span>
+                  )}
+                  {selRefugio.responsable && (
+                    <span className="refmetarow">{ICON.volunteer}{t.refManager}: {selRefugio.responsable}</span>
+                  )}
+                  {selRefugio.address && (
+                    <span className="refmetarow">{ICON.pin}{selRefugio.address}</span>
+                  )}
+                </div>
+              )}
+              {!selRefugio.necesita && selRefugio.recibe.length === 0 && (
+                <p className="refnonote">{t.refNoNeeds}</p>
+              )}
+              <div className="dactions">
+                <a
+                  className="btnp"
+                  href={mapsDirectionsUrl(selStateLoc.lat, selStateLoc.lng)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {ICON.pin}
+                  {t.directions}
+                </a>
+                {selStateLoc.contact_whatsapp && (
+                  <a
+                    className="btng"
+                    href={`https://wa.me/${selStateLoc.contact_whatsapp.replace(/[^0-9]/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {ICON.wa}
+                    {t.whatsapp}
+                  </a>
+                )}
+                {selStateLoc.contact_phone && (
+                  <a className="btng" href={`tel:${selStateLoc.contact_phone}`}>
+                    {ICON.phone}
+                    {t.call}
+                  </a>
+                )}
+                <button className="btng" onClick={() => shareRefugio(selStateLoc, selRefugio)}>
+                  {ICON.share}
+                  {t.refShareCta}
+                </button>
+              </div>
+              <div className="reffoot">
+                {selRefugio.last_confirmed_at && (
+                  <span>{t.refConfirmed} {timeAgo(selRefugio.last_confirmed_at, lang)}</span>
+                )}
+                {selRefugio.fuente && <span>{t.refSource}: {selRefugio.fuente}</span>}
+                {/* CC-BY 4.0 attribution (required by AcopioVE's license). */}
+                <a className="refattrib" href="https://acopiove.org" target="_blank" rel="noopener noreferrer">
+                  {t.refAttrib}
+                </a>
+              </div>
+            </div>
+          )}
           {list.map((p) => (
             <button key={p.id} className={"card " + SM[p.estatus].cls} onClick={() => openDetail(p)}>
               <Avatar p={p} cls="av" />
@@ -2554,7 +2229,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             </button>
           ))}
           {list.length === 0 && !showDonationInfo && <div className="empty">{t.noResults}</div>}
-          {list.length === 0 && showDonationInfo && selStateLoc && (
+          {/* refcard already carries the info + contact actions for refugios. */}
+          {list.length === 0 && showDonationInfo && selStateLoc && !selRefugio && (
             <div className="locinfo">
               <div className="empty">
                 {selStateLoc.type === "donation_centre" ? t.donationInfo : t.noPatientsHere}
@@ -2594,853 +2270,79 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
       {/* ---- Detail overlay ---- */}
       {view === "detail" && selP && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button className="oicon" onClick={() => setView(null)}>
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.detailTitle}</span>
-            <button className="oicon" onClick={shareCurrent}>
-              {ICON.share}
-            </button>
-          </div>
-          <div className="ovbody">
-            <div className={"dhero " + SM[selP.estatus].cls}>
-              <Avatar p={selP} cls="dav" />
-              <span className="dname">{selP.nombres + " " + selP.apellidos}</span>
-              <span className="badge">
-                <span className="dot"></span>
-                {SM[selP.estatus][lang]}
-              </span>
-              {selP.verified && (
-                <span className="vchk">
-                  {ICON.check}
-                  {t.verifiedYes}
-                </span>
-              )}
-            </div>
-            {/* Prominent "last updated" — in an emergency people need to see how fresh
-                the record is FIRST (multiple transfers happen; §14). Relative time big,
-                exact datetime beneath. */}
-            <div className="dupdated-hero">
-              <span className="duh-label">{t.updatedTitle}</span>
-              <span className="duh-time">{timeAgo(selP.updated_at, lang)}</span>
-              <span className="duh-date">
-                {new Date(selP.updated_at).toLocaleString(lang === "es" ? "es-VE" : "en-US")}
-              </span>
-            </div>
-            <div className="drows">
-              {[
-                { label: t.f_status, value: SM[selP.estatus][lang], mono: "" },
-                { label: t.ci, value: selP.ci_display, mono: "mono" },
-                { label: t.edad, value: selP.edad != null ? selP.edad + " " + t.yrs : "—", mono: "" },
-                { label: t.sexo, value: selP.sexo === "F" ? t.female : selP.sexo === "M" ? t.male : "—", mono: "" },
-                { label: t.ubic, value: selP.location_name, mono: "" },
-                { label: t.type, value: TYPE_META[selP.location_type][lang], mono: "" },
-                { label: t.municipality, value: selP.municipality ?? "—", mono: "" },
-                { label: t.state, value: STATE_LABEL[selP.state], mono: "" },
-                { label: t.verified, value: selP.verified ? t.verifiedYes : t.verifiedNo, mono: "" },
-              ].map((r, i) => (
-                <div className="drow" key={i}>
-                  <span className="dlabel">{r.label}</span>
-                  <span className={"dval " + r.mono}>{r.value}</span>
-                </div>
-              ))}
-            </div>
-            {/* Methodology disclaimer (§14): the list doesn't guarantee the person is
-                still at the center, but it does guarantee the veracity + date of the
-                published data. A tool for search, consultation and citizen collaboration. */}
-            <div className="ddisclaimer">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 11v5M12 8h.01" />
-              </svg>
-              <span>{t.cardDisclaimer}</span>
-            </div>
-            <div className="dactions">
-              <button className="btnp" onClick={shareCurrent}>
-                {ICON.share}
-                {t.share}
-              </button>
-              <button className="btng" onClick={openContribute}>
-                {ICON.plus}
-                {t.contribCta}
-              </button>
-              <button className="btng" onClick={seeOnMap}>
-                {ICON.pin}
-                {t.seeMap}
-              </button>
-              <a
-                className="btng"
-                href={mapsDirectionsUrl(selP.lat, selP.lng)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {ICON.pin}
-                {t.directions}
-              </a>
-              {selLoc?.contact_whatsapp && (
-                <a
-                  className="btng"
-                  href={`https://wa.me/${selLoc.contact_whatsapp.replace(/[^0-9]/g, "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {ICON.wa}
-                  {t.whatsapp}
-                </a>
-              )}
-              {selLoc?.contact_phone && (
-                <a className="btng" href={`tel:${selLoc.contact_phone}`}>
-                  {ICON.phone}
-                  {t.call}
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
+        <DetailView
+          t={t}
+          lang={lang}
+          patient={selP}
+          loc={selLoc}
+          onShare={shareCurrent}
+          onContribute={openContribute}
+          onSeeMap={seeOnMap}
+          onClose={() => setView(null)}
+        />
       )}
 
       {/* ---- Contribute overlay (public → contributions moderation queue) ---- */}
       {view === "contribute" && selP && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button className="oicon" onClick={() => setView("detail")}>
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.contribTitle}</span>
-          </div>
-          <div className="ovbody">
-            {cbDone ? (
-              <div className="contact-ack">
-                <div className="contact-ack-ico">{ICON.check}</div>
-                <h3 className="contact-ack-title">{t.contribAckTitle}</h3>
-                <p className="contact-ack-body">{t.contribAckBody}</p>
-                <button className="btnp" onClick={() => setView("detail")}>
-                  {t.contribAckClose}
-                </button>
-              </div>
-            ) : (
-              <div className="form">
-                <div className="fld">
-                  <span className="flabel">{t.contribFor}</span>
-                  <div className="aname">{selP.nombres + " " + selP.apellidos}</div>
-                  <span className="asub">{selP.location_name}</span>
-                </div>
-                <p className="donate-sub">{t.contribSub}</p>
-                <div className="fld">
-                  <span className="flabel">{t.contribDescLabel}</span>
-                  <textarea
-                    className="finput"
-                    rows={4}
-                    value={cbDesc}
-                    onChange={(e) => setCbDesc(e.target.value)}
-                    placeholder={t.contribDescPh}
-                  />
-                </div>
-                {selP.is_minor ? (
-                  <div className="note">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
-                    </svg>
-                    {t.contribMinorNote}
-                  </div>
-                ) : (
-                  <div className="fld">
-                    <span className="flabel">{t.contribPhoto}</span>
-                    {cbPhoto ? (
-                      <div className="upload upload-has">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={cbPhoto} alt="" className="upload-thumb" />
-                        <button type="button" className="upload-remove" onClick={() => setCbPhoto(null)}>
-                          {t.removePhoto}
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="upload">
-                        <input type="file" accept="image/*" onChange={onPickContribPhoto} style={{ display: "none" }} disabled={cbPhotoBusy} />
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 16V4M8 8l4-4 4 4" />
-                          <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-                        </svg>
-                        {cbPhotoBusy ? t.photoBusy : t.f_photoHint}
-                      </label>
-                    )}
-                  </div>
-                )}
-                <div className="fld">
-                  <span className="flabel">{t.contribContact}</span>
-                  <input className="finput" value={cbContact} onChange={(e) => setCbContact(e.target.value)} placeholder="+58… / correo" />
-                </div>
-                <div className="note">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 11v5M12 8h.01" />
-                  </svg>
-                  {t.contribNote}
-                </div>
-                <button className="btnp" onClick={submitContribution} disabled={cbBusy}>
-                  {cbBusy ? t.contribSending : t.contribSend}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <ContributeView t={t} patient={selP} showToast={showToast} onClose={() => setView("detail")} />
       )}
 
       {/* ---- Share overlay ---- */}
       {view === "share" && selP && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button className="oicon" onClick={() => setView("detail")}>
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.shareTitle}</span>
-          </div>
-          <div className="ovbody">
-            <p className="sdesc">{t.shareDesc}</p>
-            <div className="chat">
-              <div className="bubble">
-                <div className={"ogcard " + SM[selP.estatus].cls}>
-                  <div className="ogimg">
-                    {selP.foto_url && !selP.is_minor ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={selP.foto_url} alt="" loading="lazy" decoding="async" />
-                    ) : (
-                      initials(selP)
-                    )}
-                  </div>
-                  <div className="ogtxt">
-                    <span className="ogk">{t.cardKicker + " · HELPMAP"}</span>
-                    <span className="ogname">{selP.nombres + " " + selP.apellidos}</span>
-                    <span className="ogmeta">
-                      <span className="dot"></span>
-                      {SM[selP.estatus][lang] + " · " + selP.location_name}
-                    </span>
-                    <span className="ogurl">{"helpmapvzla.net/p/" + selP.id.slice(0, 8) + "…"}</span>
-                  </div>
-                </div>
-                <span className="blink">{"helpmapvzla.net/p/" + selP.id.slice(0, 8) + "…"}</span>
-                <span className="btime">12:48 ✓✓</span>
-              </div>
-            </div>
-            <div className="targets">
-              <button className="tgt" onClick={() => shareTo("wa")}>
-                <span className="ti ti-wa">WA</span>WhatsApp
-              </button>
-              <button className="tgt" onClick={() => shareTo("tg")}>
-                <span className="ti ti-tg">TG</span>Telegram
-              </button>
-              <button className="tgt" onClick={() => shareTo("ig")}>
-                <span className="ti ti-ig">IG</span>Instagram
-              </button>
-              <button className="tgt" onClick={() => shareTo("copy")}>
-                <span className="ti ti-cp">↗</span>
-                {t.copyLink}
-              </button>
-            </div>
-            <p className="share-disc">{ICON.check}{t.shareDisclosure}</p>
-          </div>
-        </div>
+        <ShareView t={t} lang={lang} patient={selP} onShareTo={shareTo} onBack={() => setView("detail")} />
       )}
 
       {/* ---- Donate overlay (external partners; opens in a new tab) ---- */}
       {view === "donate" && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button className="oicon" onClick={() => setView(null)}>
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.donateTitle}</span>
-          </div>
-          <div className="ovbody">
-            <p className="donate-sub">{t.donateSub}</p>
-            <div className="donate-list">
-              {donations.map((d) => {
-                const open = openDon === d.id;
-                const hasBody = !!(d.donate_info || d.social_url || d.donate_url);
-                return (
-                  <div key={d.id} className={"donate-card" + (open ? " open" : "")}>
-                    <button
-                      type="button"
-                      className="donate-toggle"
-                      onClick={() => hasBody && setOpenDon(open ? null : d.id)}
-                      aria-expanded={open}
-                      disabled={!hasBody}
-                    >
-                      <div className="donate-info">
-                        <span className="donate-name">{d.name}</span>
-                        {d.description && <span className="donate-desc">{d.description}</span>}
-                      </div>
-                      {hasBody && <span className="donate-chev">{ICON.chevD}</span>}
-                    </button>
-                    {open && hasBody && (
-                      <div className="donate-body">
-                        {d.donate_info && (
-                          <div className="donate-data">
-                            <span className="donate-data-label">{t.donData}</span>
-                            <span className="donate-data-txt">{d.donate_info}</span>
-                            <button
-                              type="button"
-                              className="donate-copy"
-                              onClick={async () => {
-                                if (await copyText(d.donate_info!)) showToast(t.copied);
-                              }}
-                            >
-                              {ICON.copy}
-                              {t.donCopy}
-                            </button>
-                          </div>
-                        )}
-                        {(d.social_url || d.donate_url) && (
-                          <div className="donate-acts">
-                            {d.social_url && (
-                              <a
-                                className="donate-ig"
-                                href={d.social_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label={t.donFollow}
-                              >
-                                {ICON.ig}
-                                {t.donFollow}
-                              </a>
-                            )}
-                            {d.donate_url && (
-                              <a className="donate-go" href={d.donate_url} target="_blank" rel="noopener noreferrer">
-                                {t.donateCta}
-                              </a>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {donations.length === 0 && <p className="donate-desc">{t.donNone}</p>}
-            </div>
-            <div className="donate-join">
-              <span className="donate-join-t">{t.donateJoin}</span>
-              <span className="donate-desc">{t.donateJoinSub}</span>
-              <div className="dactions" style={{ marginTop: 11 }}>
-                {VOLUNTEER.whatsapp && (
-                  <a
-                    className="btng"
-                    href={`https://wa.me/${VOLUNTEER.whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(t.donateJoin)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {ICON.wa}
-                    {t.whatsapp}
-                  </a>
-                )}
-                <button className="btnp" onClick={() => openContact("donation")}>
-                  {ICON.mail}
-                  {t.donateJoinCta}
-                </button>
-              </div>
-            </div>
-            <p className="donate-note">{t.donateNote}</p>
-          </div>
-        </div>
+        <DonateView
+          t={t}
+          donations={donations}
+          showToast={showToast}
+          onJoin={() => openContact("donation")}
+          onClose={() => setView(null)}
+        />
       )}
 
       {/* ---- Volunteer overlay (recruit health/rescue staff with real info) ---- */}
       {view === "volunteer" && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button
-              className="oicon"
-              onClick={() => {
-                setView(null);
-                setVsOpen(false);
-                setVsDone(false);
-              }}
-            >
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.volunteerTitle}</span>
-          </div>
-          <div className="ovbody">
-            <p className="donate-sub">{t.volunteerSub}</p>
-            <div className="vol-roles">
-              {VOLUNTEER_ROLES.map((r) => (
-                <div className="vol-role" key={r.es}>
-                  <span className="vol-check">{ICON.check}</span>
-                  <span>{r[lang]}</span>
-                </div>
-              ))}
-            </div>
-
-            {vsDone ? (
-              <div className="contact-ack">
-                <div className="contact-ack-ico">{ICON.check}</div>
-                <h3 className="contact-ack-title">{t.volSignupDoneTitle}</h3>
-                <p className="contact-ack-body">{t.volSignupDoneBody}</p>
-                <button
-                  className="btng"
-                  onClick={() => {
-                    setVsDone(false);
-                    setVsOpen(false);
-                  }}
-                >
-                  {t.contribAckClose}
-                </button>
-              </div>
-            ) : vsOpen ? (
-              <div className="form">
-                <p className="donate-sub">{t.volSignupSub}</p>
-                {/* Honeypot: hidden from humans; bots that fill every field get dropped. */}
-                <input
-                  type="text"
-                  name="website"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  aria-hidden="true"
-                  value={vsHp}
-                  onChange={(e) => setVsHp(e.target.value)}
-                  style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
-                />
-                <div className="fld">
-                  <span className="flabel">{t.f_volName}</span>
-                  <input className="finput" value={vsName} onChange={(e) => setVsName(e.target.value)} placeholder={t.f_volName} />
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.email}</span>
-                  <input className="finput" type="email" autoComplete="email" value={vsEmail} onChange={(e) => setVsEmail(e.target.value)} placeholder="tu@correo.com" />
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.volSignupPass}</span>
-                  <input className="finput" type="password" autoComplete="new-password" value={vsPass} onChange={(e) => setVsPass(e.target.value)} placeholder="••••••" />
-                  <span className="fhint">{t.volSignupPassHint}</span>
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.f_volProfile}</span>
-                  <select className="fselect" value={vsProfile} onChange={(e) => setVsProfile(e.target.value)}>
-                    <option value="">{t.f_volProfilePh}</option>
-                    {VOL_PROFILES.map((pf) => (
-                      <option key={pf.value} value={pf.value}>
-                        {pf[lang]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.f_volSources}</span>
-                  <textarea className="finput" rows={3} value={vsSources} onChange={(e) => setVsSources(e.target.value)} placeholder={t.f_volSourcesPh} />
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.f_volPhone}</span>
-                  <input className="finput" value={vsPhone} onChange={(e) => setVsPhone(e.target.value)} placeholder="+58…" />
-                </div>
-                <div className="note">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 11v5M12 8h.01" />
-                  </svg>
-                  {t.volSignupNote}
-                </div>
-                <div className="ebtns">
-                  <button className="btng" onClick={() => setVsOpen(false)}>
-                    {t.cancel}
-                  </button>
-                  <button className="btnp" onClick={submitVolunteerSignup} disabled={vsBusy}>
-                    {vsBusy ? t.volSignupSending : t.volSignupSend}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className="vol-ask">{t.volunteerAsk}</p>
-                <button className="btnp" onClick={() => { setVsHp(""); vsOpenedAt.current = Date.now(); setVsOpen(true); }} style={{ width: "100%" }}>
-                  {ICON.check}
-                  {t.volSignupCta}
-                </button>
-                <div className="dactions" style={{ marginTop: 10 }}>
-                  {VOLUNTEER.whatsapp && (
-                    <a
-                      className="btng"
-                      href={`https://wa.me/${VOLUNTEER.whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(t.volunteerWaMsg)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {ICON.wa}
-                      {t.volunteerWa}
-                    </a>
-                  )}
-                  <button className="btng" onClick={() => openContact("volunteer")}>
-                    {ICON.mail}
-                    {t.volunteerEmail}
-                  </button>
-                </div>
-              </>
-            )}
-            <p className="donate-note">{t.volunteerNote}</p>
-          </div>
-        </div>
+        <VolunteerView
+          t={t}
+          lang={lang}
+          showToast={showToast}
+          onEmailContact={() => openContact("volunteer")}
+          onClose={() => setView(null)}
+        />
       )}
 
       {/* ---- Contact overlay (public; sends an in-app email + image attachments) ---- */}
       {view === "contact" && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button className="oicon" onClick={() => setView(null)}>
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.contactTitle}</span>
-          </div>
-          <div className="ovbody">
-            {cDone ? (
-              <div className="contact-ack">
-                <div className="contact-ack-ico">{ICON.check}</div>
-                <h3 className="contact-ack-title">{t.contactAckTitle}</h3>
-                <p className="contact-ack-body">{t.contactAckBody}</p>
-                <button className="btnp" onClick={() => setView(null)}>
-                  {t.contactAckClose}
-                </button>
-              </div>
-            ) : (
-            <div className="form">
-              <p className="donate-sub">{t.contactSub}</p>
-              {/* Honeypot: hidden from humans (off-screen, not tabbable, aria-hidden).
-                  Bots that auto-fill every field will populate it → server drops it. */}
-              <input
-                type="text"
-                name="website"
-                tabIndex={-1}
-                autoComplete="off"
-                aria-hidden="true"
-                value={cHp}
-                onChange={(e) => setCHp(e.target.value)}
-                style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
-              />
-              <div className="fld">
-                <span className="flabel">{t.contactName}</span>
-                <input className="finput" value={cName} onChange={(e) => setCName(e.target.value)} placeholder={t.contactName} />
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.contactEmailLabel}</span>
-                <input className="finput" type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" />
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.contactMsg}</span>
-                <textarea className="finput" rows={5} value={cMsg} onChange={(e) => setCMsg(e.target.value)} placeholder={t.contactMsg} />
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.contactPhotos}</span>
-                {cImgs.length > 0 && (
-                  <div className="cimg-grid">
-                    {cImgs.map((src, i) => (
-                      <div className="cimg" key={i}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={src} alt="" />
-                        <button type="button" className="cimg-x" onClick={() => setCImgs((a) => a.filter((_, n) => n !== i))}>
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {cImgs.length < 4 && (
-                  <label className="upload">
-                    <input type="file" accept="image/*" onChange={onPickContactPhoto} style={{ display: "none" }} />
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 16V4M8 8l4-4 4 4" />
-                      <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-                    </svg>
-                    {t.contactAddPhoto}
-                  </label>
-                )}
-              </div>
-              <button className="btnp" onClick={sendContact} disabled={cBusy}>
-                {ICON.mail}
-                {cBusy ? t.contactSending : t.contactSend}
-              </button>
-            </div>
-            )}
-          </div>
-        </div>
+        <ContactView t={t} kind={contactKind} showToast={showToast} onClose={() => setView(null)} />
       )}
 
       {/* ---- Report overlay (public intake; submits for review, not to DB) ---- */}
       {view === "report" && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button className="oicon" onClick={() => setView(null)}>
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.reportTitle}</span>
-          </div>
-          <div className="ovbody">
-            <div className="form">
-              <div className="infoneed">
-                <span className="infoneed-t">{t.infoNeededTitle}</span>
-                <span className="infoneed-d">{t.infoNeeded}</span>
-              </div>
-              {pending > 0 && (
-                <div className="stale">
-                  {ICON.wifiOff}
-                  {pending} {t.pendingSync}
-                </div>
-              )}
-              <div className="fld">
-                <span className="flabel">{t.f_ape}</span>
-                <input className="finput" placeholder={t.f_ape} value={rApe} onChange={(e) => setRApe(e.target.value)} />
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.f_nom}</span>
-                <input className="finput" placeholder={t.f_nom} value={rNom} onChange={(e) => setRNom(e.target.value)} />
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.f_minor}</span>
-                <div className="seg">
-                  <button className={"segb " + (!rMinor ? "segb-on" : "")} onClick={() => setRMinor(false)}>
-                    {t.no}
-                  </button>
-                  <button
-                    className={"segb " + (rMinor ? "segb-on" : "")}
-                    onClick={() => {
-                      setRMinor(true);
-                      setRPhoto(null); // minors never carry a photo
-                    }}
-                  >
-                    {t.yes}
-                  </button>
-                </div>
-              </div>
-              <div className="frow">
-                <div className="fld">
-                  <span className="flabel">{t.f_ci}</span>
-                  <input
-                    className="finput mono"
-                    placeholder="V-00.000.000"
-                    value={rMinor ? "MENOR" : rCi}
-                    onChange={(e) => setRCi(e.target.value)}
-                    disabled={rMinor}
-                  />
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.f_edad}</span>
-                  <input className="finput" placeholder="00" inputMode="numeric" value={rEdad} onChange={(e) => setREdad(e.target.value)} />
-                </div>
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.sexo}</span>
-                <div className="seg">
-                  <button className={"segb " + (rSexo === "M" ? "segb-on" : "")} onClick={() => setRSexo(rSexo === "M" ? "" : "M")}>
-                    {t.male}
-                  </button>
-                  <button className={"segb " + (rSexo === "F" ? "segb-on" : "")} onClick={() => setRSexo(rSexo === "F" ? "" : "F")}>
-                    {t.female}
-                  </button>
-                </div>
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.f_ubic}</span>
-                <select className="fselect" value={rLoc} onChange={(e) => setRLoc(e.target.value)}>
-                  <option value="">{t.selectHosp}</option>
-                  {locations.map((l) => (
-                    <option key={l.location_id} value={l.location_id}>
-                      {l.canonical_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.f_status}</span>
-                <select className="fselect" value={rEstatus} onChange={(e) => setREstatus(e.target.value as Estatus)}>
-                  {statusOpts.map((s) => (
-                    <option key={s.v} value={s.v}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.f_dataDate}</span>
-                <input
-                  className="finput"
-                  type="date"
-                  max={todayISO}
-                  value={rDataDate}
-                  onChange={(e) => setRDataDate(e.target.value)}
-                />
-                <span className="fhint">{t.f_dataDateHint}</span>
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.f_procedencia}</span>
-                <input className="finput" placeholder={t.f_procedenciaPh} value={rProcedencia} onChange={(e) => setRProcedencia(e.target.value)} />
-                <span className="fhint">{t.f_procedenciaHint}</span>
-              </div>
-              <div className="fld">
-                <span className="flabel">{t.f_contact}</span>
-                <input className="finput" placeholder="+58…" value={rContact} onChange={(e) => setRContact(e.target.value)} />
-              </div>
-              {!rMinor && (
-                <div className="fld">
-                  <span className="flabel">{t.f_photo}</span>
-                  {rPhoto ? (
-                    <div className="upload upload-has">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={rPhoto} alt="" className="upload-thumb" />
-                      <button type="button" className="upload-remove" onClick={() => setRPhoto(null)}>
-                        {t.removePhoto}
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="upload">
-                      <input type="file" accept="image/*" onChange={onPickPhoto} style={{ display: "none" }} disabled={rPhotoBusy} />
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 16V4M8 8l4-4 4 4" />
-                        <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-                      </svg>
-                      {rPhotoBusy ? t.photoBusy : t.f_photoHint}
-                    </label>
-                  )}
-                </div>
-              )}
-              <div className="note">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 11v5M12 8h.01" />
-                </svg>
-                {t.note}
-              </div>
-              <div className="note">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
-                </svg>
-                {t.noteMinors}
-              </div>
-              <button className="btnp" onClick={submitReport}>
-                {t.submit}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReportView
+          t={t}
+          lang={lang}
+          locations={locations}
+          pending={pending}
+          onPendingChange={setPending}
+          showToast={showToast}
+          onClose={() => setView(null)}
+        />
       )}
 
       {/* ---- Report a missing person (public "Reportar" → /api/reports queue+email) ---- */}
       {view === "reportMissing" && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button className="oicon" onClick={() => setView(null)}>
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.rmTitle}</span>
-          </div>
-          <div className="ovbody">
-            {rmDone ? (
-              <div className="contact-ack">
-                <div className="contact-ack-ico">{ICON.check}</div>
-                <h3 className="contact-ack-title">{t.rmDoneTitle}</h3>
-                <p className="contact-ack-body">{t.rmDoneBody}</p>
-                <button className="btnp" onClick={() => setView(null)}>
-                  {t.rmDoneClose}
-                </button>
-              </div>
-            ) : (
-              <div className="form">
-                <div className="infoneed">
-                  <span className="infoneed-d">{t.rmIntro}</span>
-                </div>
-                <div className="fld-sec">{t.rmWho}</div>
-                <div className="fld">
-                  <span className="flabel">{t.f_ape}</span>
-                  <input className="finput" placeholder={t.f_ape} value={rmApe} onChange={(e) => setRmApe(e.target.value)} />
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.f_nom}</span>
-                  <input className="finput" placeholder={t.f_nom} value={rmNom} onChange={(e) => setRmNom(e.target.value)} />
-                </div>
-                <div className="frow">
-                  <div className="fld">
-                    <span className="flabel">{t.f_ci}</span>
-                    <input className="finput mono" placeholder="V-00.000.000" value={rmCi} onChange={(e) => setRmCi(e.target.value)} />
-                  </div>
-                  <div className="fld">
-                    <span className="flabel">{t.f_edad}</span>
-                    <input className="finput" placeholder="00" inputMode="numeric" value={rmEdad} onChange={(e) => setRmEdad(e.target.value)} />
-                  </div>
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.rmZona}</span>
-                  <input className="finput" placeholder={t.rmZonaPh} value={rmZona} onChange={(e) => setRmZona(e.target.value)} />
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.rmDesc}</span>
-                  <textarea className="finput" rows={3} placeholder={t.rmDescPh} value={rmDesc} onChange={(e) => setRmDesc(e.target.value)} />
-                </div>
-                <div className="fld-sec">{t.rmReporter}</div>
-                <div className="fld">
-                  <span className="flabel">{t.rmReporter}</span>
-                  <input className="finput" placeholder={t.rmReporter} value={rmReporter} onChange={(e) => setRmReporter(e.target.value)} />
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.rmContact}</span>
-                  <input className="finput" placeholder="+58… / correo" value={rmContact} onChange={(e) => setRmContact(e.target.value)} />
-                  <span className="fhint">{t.rmContactHint}</span>
-                </div>
-                <div className="note">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 11v5M12 8h.01" />
-                  </svg>
-                  {t.rmNote}
-                </div>
-                <button className="btnp" onClick={submitReportMissing} disabled={rmBusy}>
-                  {rmBusy ? t.contribSending : t.rmSubmit}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <ReportMissingView t={t} showToast={showToast} onClose={() => setView(null)} />
       )}
 
       {/* ---- Rescued people (public list) — field info network, no map pins ---- */}
-      {view === "rescued" && (
-        <div className="overlay">
-          <div className="ovhead">
-            <button className="oicon" onClick={() => setView(null)}>
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.rescuedListTitle}</span>
-          </div>
-          <div className="ovbody">
-            <div className="note" style={{ marginBottom: 14 }}>
-              <span className="resc-ic">{ICON.rescue}</span>
-              {t.rescuedListSub}
-            </div>
-            {rescatados.length === 0 && <div className="empty">{t.rescuedNone}</div>}
-            {rescatados.map((r) => (
-              <div className={"card st-resc"} key={r.id}>
-                <Avatar p={r} cls="av" />
-                <div className="cmid">
-                  <span className="cname">
-                    {(r.nombres + " " + r.apellidos).trim() || "—"}
-                    {r.verified && <span className="vchk"> {ICON.check}</span>}
-                  </span>
-                  <span className="cmeta">
-                    {[
-                      r.edad != null ? r.edad + " " + t.yrs : null,
-                      r.sexo === "M" ? t.male : r.sexo === "F" ? t.female : null,
-                      !r.is_minor && r.ci_display && r.ci_display !== "—" ? r.ci_display : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </div>
-                <div className="cend">
-                  <span className="badge resc-badge">
-                    <span className="dot"></span>
-                    {t.rescuedStatus}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {view === "rescued" && <RescuedView t={t} rescatados={rescatados} onClose={() => setView(null)} />}
+
+      {/* ---- Refugios needs list (visibilizar necesidades + prompt to collaborate) ---- */}
+      {view === "refugios" && (
+        <RefugiosView t={t} refugioNeeds={refugioNeeds} onShare={shareRefugio} onClose={() => setView(null)} />
       )}
 
       {/* ---- Admin overlay (Supabase Auth protected) ---- */}
@@ -4134,6 +3036,57 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                         <input className="finput mono" value={draft?.lng || ""} onChange={setD("lng")} placeholder="-66.90" inputMode="decimal" />
                       </div>
                     </div>
+                    {/* Refugio needs: only for shelters. Editable by staff so each
+                        refugio's differing needs stay current (AcopioVE, §14). */}
+                    {draft?.type === "shelter" && (
+                      <div className="refedit">
+                        <span className="refedit-h">{t.refEditTitle}</span>
+                        <div className="fld">
+                          <span className="flabel">{t.f_refNecesita}</span>
+                          <textarea
+                            className="finput"
+                            rows={3}
+                            value={draft?.ref_necesita || ""}
+                            onChange={(e) => setDraft((d) => ({ ...(d || {}), ref_necesita: e.target.value }))}
+                            placeholder={t.f_refNecesita}
+                          />
+                          <span className="fhint">{t.f_refNecesitaHint}</span>
+                        </div>
+                        <div className="fld">
+                          <span className="flabel">{t.f_refRecibe}</span>
+                          <input
+                            className="finput"
+                            value={draft?.ref_recibe || ""}
+                            onChange={setD("ref_recibe")}
+                            placeholder="Agua, Alimentos, Medicamentos, Pañales"
+                          />
+                          <span className="fhint">{t.f_refRecibeHint}</span>
+                        </div>
+                        <div className="fld">
+                          <span className="flabel">{t.f_refHorario}</span>
+                          <input className="finput" value={draft?.ref_horario || ""} onChange={setD("ref_horario")} placeholder={t.f_refHorario} />
+                        </div>
+                        <div className="fld">
+                          <span className="flabel">{t.f_refResponsable}</span>
+                          <input className="finput" value={draft?.ref_responsable || ""} onChange={setD("ref_responsable")} placeholder={t.f_refResponsable} />
+                        </div>
+                        <div className="fld">
+                          <span className="flabel">{t.f_refAddress}</span>
+                          <input className="finput" value={draft?.ref_address || ""} onChange={setD("ref_address")} placeholder={t.f_refAddress} />
+                        </div>
+                        <div className="fld">
+                          <span className="flabel">{t.f_refAnimal}</span>
+                          <div className="seg">
+                            <button className={"segb " + (!draft?.ref_animal ? "segb-on" : "")} onClick={setDV("ref_animal", false)}>
+                              {t.no}
+                            </button>
+                            <button className={"segb " + (draft?.ref_animal ? "segb-on" : "")} onClick={setDV("ref_animal", true)}>
+                              {t.yes}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="ebtns">
                       <button className="btng" onClick={clearEdit}>
                         {t.cancel}

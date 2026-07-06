@@ -411,6 +411,48 @@ body{margin:0;background:#fff}
 .resc-cta svg{width:18px;height:18px}
 .st-resc{--c:#0e7c8b}
 
+/* ---- Refugio needs card (AcopioVE shelters: what they receive + need now) ---- */
+.refcard{border:1px solid #fde3a7;background:#fffdf5;border-radius:14px;padding:14px;margin:0 0 12px;display:flex;flex-direction:column;gap:12px}
+.refhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.refkick{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#b45309}
+.refkick svg{width:13px;height:13px}
+.refanimal{flex:0 0 auto;font-size:10.5px;font-weight:800;color:#7c3a03;background:#fde68a;border-radius:8px;padding:4px 8px}
+.refneed{border:1px solid #f4c77a;background:#fff7e6;border-radius:11px;padding:11px}
+.reflabel{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;color:#92600a}
+.reflabel svg{width:14px;height:14px;color:#b45309}
+.refneedtxt{margin:7px 0 0;font-size:13.5px;line-height:1.42;color:#5b4408;font-weight:500}
+.refblock{display:flex;flex-direction:column;gap:8px}
+.refchips{display:flex;flex-wrap:wrap;gap:6px}
+.refchip{font-size:12px;font-weight:600;color:#3f5a2e;background:#eef6e6;border:1px solid #d6e8c4;border-radius:999px;padding:4px 10px}
+.refmeta{display:flex;flex-direction:column;gap:6px}
+.refmetarow{display:flex;align-items:flex-start;gap:6px;font-size:12.5px;line-height:1.35;color:#4b5563}
+.refmetarow svg{flex:0 0 auto;width:14px;height:14px;color:#9ca3af;margin-top:1px}
+.refnonote{margin:0;font-size:12.5px;line-height:1.4;color:#6b7280}
+.refcard .dactions{margin-top:2px}
+.reffoot{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10.5px;color:#9a8748;border-top:1px solid #f2e6c4;padding-top:9px}
+/* staff refugio-needs editor block inside the center form */
+.refedit{display:flex;flex-direction:column;gap:13px;border:1px solid #fde3a7;background:#fffdf5;border-radius:12px;padding:13px;margin-top:2px}
+.refedit-h{font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#b45309}
+/* "N refugios necesitan ayuda" entry bar (mirrors .rescbar, amber help accent) */
+.refbar{display:flex;align-items:center;gap:9px;width:100%;margin:0 0 10px;padding:10px 11px;border:1px solid #f6d492;background:#fff8ea;border-radius:12px;cursor:pointer;font-family:inherit;text-align:left}
+.refbar-ic{flex:0 0 auto;width:20px;height:20px;color:#b45309;display:flex;align-items:center;justify-content:center}
+.refbar-ic svg{width:18px;height:18px}
+.refbar-txt{flex:1;font-size:12.5px;line-height:1.3;color:#8a5a06;font-weight:800}
+.refbar-cta{flex:0 0 auto;color:#b45309;display:flex}
+.refbar-cta svg{width:18px;height:18px}
+/* refugio row in the needs list */
+.refitem{border:1px solid #fde3a7;background:#fffdf5;border-radius:14px;padding:14px;margin:0 0 12px;display:flex;flex-direction:column;gap:12px}
+.refitem-h{display:flex;flex-direction:column;gap:4px}
+.refitem-name{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:15px;font-weight:800;color:#1f2937}
+.refitem-place{display:flex;align-items:center;gap:5px;font-size:12px;color:#6b7280}
+.refitem-place svg{width:13px;height:13px;color:#9ca3af}
+.refitem-acts{display:flex;flex-wrap:wrap;gap:8px}
+.refitem-acts .btnp,.refitem-acts .btng{flex:1;min-width:120px;padding:12px}
+/* CC-BY 4.0 attribution for AcopioVE data (license requirement) */
+.refattrib{display:inline-block;font-size:10.5px;color:#9a8748;text-decoration:none}
+.refattrib:hover{text-decoration:underline}
+.refattrib-foot{margin:4px 2px 8px;color:#9ca3af}
+
 /* ---- Contact form (write to us + image attachments) ---- */
 textarea.finput{resize:vertical;min-height:96px;font-family:inherit;line-height:1.45}
 .cimg-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}

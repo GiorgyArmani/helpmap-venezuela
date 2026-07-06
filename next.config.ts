@@ -6,6 +6,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: import.meta.dirname,
   },
+  experimental: {
+    // The dev/prod server otherwise preloads every page's JS modules into memory at
+    // startup. With this app's very large client component that inflates the JS heap and
+    // contributed to `next dev` OOMing after a while. Load entries lazily instead.
+    // (Next docs → "How to optimize memory usage".)
+    preloadEntriesOnStart: false,
+  },
   async headers() {
     return [
       {

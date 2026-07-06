@@ -42,6 +42,24 @@ export interface Donation {
   active: boolean;
 }
 
+// `refugios` table — companion (1:1 by location_id) to a `locations` row of
+// type=shelter. Holds the editable, shelter-specific info AcopioVE provides: what the
+// shelter RECEIVES (recibe) and what it NEEDS now (necesita). No sensitive fields, so
+// anon reads it directly; staff (volunteer OR admin) edit it. See db/refugios.sql.
+export interface Refugio {
+  location_id: string;
+  recibe: string[];
+  necesita: string | null;
+  horario: string | null;
+  responsable: string | null;
+  fuente: string | null;
+  address: string | null;
+  external_id: string | null;
+  es_animal: boolean;
+  last_confirmed_at: string | null;
+  updated_at?: string;
+}
+
 // `patients_public` view — already privacy-filtered at the DB layer:
 // no procedencia/servicio, ci_display = "MENOR" for minors, foto_url null
 // unless the record is an adult AND verified.
@@ -250,6 +268,14 @@ export interface Strings {
   reportMarkReviewed: string; reportCloseAction: string; reportReporter: string;
   reportZonaLabel: string; reportUpdated: string;
   updatedTitle: string; cardDisclaimer: string;
+  refShelterInfo: string; refReceives: string; refNeeds: string; refSchedule: string;
+  refManager: string; refConfirmed: string; refSource: string; refAnimal: string;
+  refNoNeeds: string;
+  refEditTitle: string; f_refRecibe: string; f_refRecibeHint: string; f_refNecesita: string;
+  f_refNecesitaHint: string; f_refHorario: string; f_refResponsable: string; f_refAddress: string;
+  f_refAnimal: string;
+  refNeedBar: string; refListTitle: string; refListSub: string; refListEmpty: string;
+  refShareCta: string; refShareTag: string; refHelpHow: string; refAttrib: string;
 }
 
 export const T: Record<Lang, Strings> = {
@@ -525,6 +551,32 @@ export const T: Record<Lang, Strings> = {
     updatedTitle: "Última actualización",
     cardDisclaimer:
       "Los datos reflejan el último registro disponible y su fecha. En una emergencia hay múltiples traslados: esta lista no garantiza que la persona siga en ese centro, pero sí la veracidad y la fecha del dato publicado. La información se actualiza a medida que llegan nuevos aportes. Úsala como herramienta de búsqueda, consulta y colaboración ciudadana.",
+    refShelterInfo: "Refugio · información y necesidades",
+    refReceives: "Recibe donaciones de",
+    refNeeds: "Necesita ahora",
+    refSchedule: "Horario",
+    refManager: "Responsable",
+    refConfirmed: "Confirmado",
+    refSource: "Fuente",
+    refAnimal: "Refugio de animales",
+    refNoNeeds: "Este refugio aún no ha reportado necesidades específicas. Puedes contactarlo para saber cómo ayudar.",
+    refEditTitle: "Necesidades del refugio",
+    f_refRecibe: "Recibe (tipos de donación)",
+    f_refRecibeHint: "Separa cada tipo con una coma (ej.: Agua, Medicamentos, Pañales).",
+    f_refNecesita: "Necesita ahora",
+    f_refNecesitaHint: "Qué hace falta con urgencia. Actualízalo cuando cambie.",
+    f_refHorario: "Horario",
+    f_refResponsable: "Responsable / contacto",
+    f_refAddress: "Dirección / referencia",
+    f_refAnimal: "¿Es refugio de animales?",
+    refNeedBar: "{n} refugios necesitan ayuda",
+    refListTitle: "Refugios · cómo colaborar",
+    refListSub: "Necesidades reportadas por refugios y puntos de acopio. Colabora como puedas, donde puedas: acércales lo que necesitan, o comparte para que llegue a más gente.",
+    refListEmpty: "Aún no hay necesidades reportadas. Vuelve pronto.",
+    refShareCta: "Compartir necesidad",
+    refShareTag: "Colabora como puedas, donde puedas · HelpMap VE",
+    refHelpHow: "Cómo ayudar",
+    refAttrib: "Datos de refugios: AcopioVE (acopiove.org) · CC-BY 4.0",
   },
   en: {
     appName: "HelpMap VE", tagline: "Humanitarian OSINT",
@@ -798,6 +850,32 @@ export const T: Record<Lang, Strings> = {
     updatedTitle: "Last updated",
     cardDisclaimer:
       "The data reflects the latest available record and its date. In an emergency there are multiple transfers: this list does not guarantee the person is still at that center, but it does guarantee the veracity and date of the published data. Information is updated as new contributions arrive. Use it as a tool for searching, consultation and citizen collaboration.",
+    refShelterInfo: "Shelter · info & needs",
+    refReceives: "Accepts donations of",
+    refNeeds: "Needs right now",
+    refSchedule: "Hours",
+    refManager: "Contact person",
+    refConfirmed: "Confirmed",
+    refSource: "Source",
+    refAnimal: "Animal shelter",
+    refNoNeeds: "This shelter hasn't reported specific needs yet. You can contact them to ask how to help.",
+    refEditTitle: "Shelter needs",
+    f_refRecibe: "Accepts (donation types)",
+    f_refRecibeHint: "Separate each type with a comma (e.g. Water, Medicine, Diapers).",
+    f_refNecesita: "Needs right now",
+    f_refNecesitaHint: "What's urgently needed. Update it when it changes.",
+    f_refHorario: "Hours",
+    f_refResponsable: "Contact person",
+    f_refAddress: "Address / reference",
+    f_refAnimal: "Is it an animal shelter?",
+    refNeedBar: "{n} shelters need help",
+    refListTitle: "Shelters · how to help",
+    refListSub: "Needs reported by shelters and donation points. Help however you can, wherever you can: bring them what they need, or share so it reaches more people.",
+    refListEmpty: "No needs reported yet. Check back soon.",
+    refShareCta: "Share this need",
+    refShareTag: "Help however you can, wherever you can · HelpMap VE",
+    refHelpHow: "How to help",
+    refAttrib: "Shelter data: AcopioVE (acopiove.org) · CC-BY 4.0",
   },
 };
 
