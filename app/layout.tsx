@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
-import VercelAnalytics from "@/components/VercelAnalytics";
+import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,6 +14,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-T75QMEHWTP";
+
 const DESCRIPTION =
   "Base de datos verificada de personas afectadas por el terremoto en Caracas, La Guaira y Miranda, en constante actualización por personal médico en campo.";
 
@@ -22,6 +24,17 @@ export const metadata: Metadata = {
   applicationName: "HelpMap Venezuela",
   title: "HelpMap Venezuela",
   description: DESCRIPTION,
+  keywords: [
+    "helpmap",
+    "helpmap venezuela",
+    "personas desaparecidas venezuela",
+    "desaparecidos terremoto caracas",
+    "emergencia caracas la guaira",
+    "buscar personas venezuela",
+    "ayuda humanitaria venezuela",
+    "terremoto venezuela 2026",
+    "listado de heridos venezuela",
+  ],
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -58,10 +71,37 @@ export default function RootLayout({
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Google Tag (gtag.js). PRIVACY (CLAUDE.md §11): searches are sensitive and a
+            patient UUID must never reach analytics. We disable GA's automatic page_view
+            and send one manually with the /p/<uuid> path REDACTED to /p/[id] — so GA only
+            ever records an aggregate per-patient count, never who is being looked up. */}
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            var __p = location.pathname.replace(/^\\/p\\/[^\\/]+/, '/p/[id]');
+            gtag('config', '${GA_ID}', {
+              send_page_view: false,
+              page_path: __p,
+              page_location: location.origin + __p + location.search,
+            });
+            gtag('event', 'page_view', {
+              page_path: __p,
+              page_location: location.origin + __p + location.search,
+              page_title: document.title,
+            });
+          `}
+        </Script>
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <ServiceWorkerRegister />
-        <VercelAnalytics />
       </body>
     </html>
   );

@@ -23,6 +23,9 @@ export async function generateMetadata({ searchParams }: SearchParams): Promise<
       lang === "en"
         ? "Product roadmap for HelpMap VE: what already works and what's coming, by phase. Ready to launch."
         : "Roadmap de producto de HelpMap VE: lo que ya funciona y lo que viene, por fases. Listos para lanzar.",
+    alternates: {
+      canonical: "/docs/roadmap" + (lang === "en" ? "?lang=en" : ""),
+    },
   };
 }
 
