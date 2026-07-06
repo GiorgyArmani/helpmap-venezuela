@@ -1,5 +1,5 @@
 {
   "crons": [
-    { "path": "/api/refugios/sync", "schedule": "*/30 * * * *" }
+    { "path": "/api/refugios/sync", "schedule": "0 6 * * *" }
   ]
 }
