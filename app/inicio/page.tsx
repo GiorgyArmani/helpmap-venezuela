@@ -27,10 +27,10 @@ export default function InicioPage() {
             ¿Cómo podemos <span style={S.accent}>ayudarte</span>?
           </h1>
           <p style={S.sub}>
-            HelpMapVzla reúne información verificada para facilitar la localización de personas trasladadas a hospitales o refugios tras una emergencia.
+            Reunimos información verificada en campo para ayudarte a encontrar a quienes fueron trasladados a hospitales o refugios tras la emergencia.
           </p>
-          <p style={S.sub}>
-           Elige una opción para continuar.
+          <p style={{ ...S.sub, ...S.subCta }}>
+            Nadie debería buscar solo. ¿Por dónde empezamos?
           </p>
         </header>
 
@@ -45,7 +45,7 @@ export default function InicioPage() {
             </span>
             <span style={S.optText}>
               <span style={S.optTitle}>Buscar a un familiar</span>
-              <span style={S.optDesc}>En un hospital o refugio tras una emergencia</span>
+              <span style={S.optDesc}>Localízalo en hospitales y refugios de la zona</span>
             </span>
             <span style={S.optArrow} aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
@@ -63,7 +63,7 @@ export default function InicioPage() {
             </span>
             <span style={S.optText}>
               <span style={S.optTitle}>Quiero ayudar</span>
-              <span style={S.optDesc}>Ayuda a otras familias a encontrar a los suyos</span>
+              <span style={S.optDesc}>Aporta datos y ayuda a reunir a otras familias</span>
             </span>
             <span style={S.optArrow} aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
@@ -122,6 +122,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   accent: { color: "#ffce33" },
   sub: { fontSize: 14.5, lineHeight: 1.5, color: "#b7bED0", margin: 0 },
+  subCta: { marginTop: 12, color: "#e7ebf4", fontWeight: 600 },
   opts: { display: "flex", flexDirection: "column", gap: 14 },
   opt: {
     display: "flex",
