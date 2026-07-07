@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ICON } from "./icons";
 import { VOLUNTEER, VOLUNTEER_ROLES, VOL_PROFILES } from "./constants";
 import type { Lang, Strings } from "./data";
@@ -9,12 +9,14 @@ export function VolunteerView({
   t,
   lang,
   showToast,
+  autoOpen = false,
   onEmailContact,
   onClose,
 }: {
   t: Strings;
   lang: Lang;
   showToast: (m: string) => void;
+  autoOpen?: boolean; // start on the signup form (deep-link from /inicio "Quiero ayudar")
   onEmailContact: () => void;
   onClose: () => void;
 }) {
@@ -26,9 +28,15 @@ export function VolunteerView({
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const [open, setOpen] = useState(false); // toggles the form open in the panel
+  const [open, setOpen] = useState(autoOpen); // toggles the form open in the panel
   const [hp, setHp] = useState(""); // anti-spam honeypot
   const openedAt = useRef(0);
+
+  // When we auto-open the form (deep-link), stamp the anti-spam timer so the
+  // "too fast to be human" heuristic still works as if the user had tapped in.
+  useEffect(() => {
+    if (autoOpen) openedAt.current = Date.now();
+  }, [autoOpen]);
 
   const submit = async () => {
     const mail = email.trim();

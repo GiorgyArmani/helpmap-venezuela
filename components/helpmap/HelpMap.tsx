@@ -78,6 +78,7 @@ import type {
 export default function HelpMap({ accent, mapLabels = true, showReport = true }: HelpMapProps) {
   const [lang, setLang] = useState<Lang>("es");
   const [view, setView] = useState<View>(null);
+  const [volAutoForm, setVolAutoForm] = useState(false); // deep-link (?ayuda=1) opens the signup form directly
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | Estatus>("all");
   const [stateF, setStateF] = useState<"all" | VzlaState>("all");
@@ -303,8 +304,29 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // Reads localStorage, which doesn't exist during SSR, so this must run in an
   // effect (not a lazy initializer). The one-time setState is intentional.
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Don't pop the first-run tour over the /inicio "ayudar" deep-link.
+    const wantsAyuda = new URLSearchParams(window.location.search).get("ayuda") === "1";
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (typeof window !== "undefined" && !localStorage.getItem(TOUR_KEY)) setTourOpen(true);
+    if (!wantsAyuda && !localStorage.getItem(TOUR_KEY)) setTourOpen(true);
+  }, []);
+
+  // Deep-link from the /inicio QR gate: `?ayuda=1` opens the "ayudar" (registration)
+  // panel directly, then strips the param so a refresh/share doesn't re-trigger it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("ayuda") !== "1") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVolAutoForm(true); // skip the intro panel → open the form directly
+    setView("volunteer");
+    params.delete("ayuda");
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash,
+    );
   }, []);
   const closeTour = () => {
     setTourOpen(false);
@@ -2309,8 +2331,12 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           t={t}
           lang={lang}
           showToast={showToast}
+          autoOpen={volAutoForm}
           onEmailContact={() => openContact("volunteer")}
-          onClose={() => setView(null)}
+          onClose={() => {
+            setView(null);
+            setVolAutoForm(false);
+          }}
         />
       )}
 

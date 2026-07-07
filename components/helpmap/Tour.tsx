@@ -171,7 +171,7 @@ const SLIDES: Slide[] = [
     eyebrow: { es: "Nuestro compromiso", en: "Our commitment" },
     title: { es: "Sin fines de lucro y con cuidado", en: "Non-profit and handled with care" },
     body: {
-      es: "Somos una iniciativa voluntaria. Esta información existe solo para reunir familias. Así protegemos los datos:",
+      es: "Somos una iniciativa ciudadana sin fines de lucro. Esta información existe solo para reunir familias. Así protegemos los datos:",
       en: "We are a volunteer initiative. This information exists only to reunite families. This is how we protect the data:",
     },
     steps: [
@@ -343,7 +343,7 @@ export default function Tour({
         {s.cta === "volunteer" && onVolunteer && (
           <button className="tour-cta" onClick={onVolunteer}>
             {I.hands}
-            {lang === "es" ? "Quiero ser voluntario" : "I want to volunteer"}
+            {lang === "es" ? "Quiero ayudar" : "I want to help"}
           </button>
         )}
 
