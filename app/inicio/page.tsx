@@ -27,7 +27,10 @@ export default function InicioPage() {
             ¿Cómo podemos <span style={S.accent}>ayudarte</span>?
           </h1>
           <p style={S.sub}>
-            HelpMapVzla reúne información verificada para facilitar la localización de personas trasladadas a hospitales o refugios tras una emergencia. Elige una opción para continuar.
+            HelpMapVzla reúne información verificada para facilitar la localización de personas trasladadas a hospitales o refugios tras una emergencia.
+          </p>
+          <p style={S.sub}>
+           Elige una opción para continuar.
           </p>
         </header>
 
@@ -42,7 +45,7 @@ export default function InicioPage() {
             </span>
             <span style={S.optText}>
               <span style={S.optTitle}>Buscar a un familiar</span>
-              <span style={S.optDesc}>En un hospital o refugio tras el terremoto</span>
+              <span style={S.optDesc}>En un hospital o refugio tras una emergencia</span>
             </span>
             <span style={S.optArrow} aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="20" height="20">
