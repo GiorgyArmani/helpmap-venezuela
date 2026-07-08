@@ -195,7 +195,12 @@ export async function PATCH(request: Request) {
           }
           publicUrl = supabase.storage.from(PUBLIC_BUCKET).getPublicUrl(pubPath).data.publicUrl;
         }
-        const { error: attErr } = await supabase.from("patients").update({ foto_url: publicUrl }).eq("id", c.patient_id);
+        // Bump the edit clock so the every-poll Sheets→Supabase pipeline (Workflow C
+        // timestamp gate) doesn't clobber this attached photo. See CLAUDE.md.
+        const { error: attErr } = await supabase
+          .from("patients")
+          .update({ foto_url: publicUrl, data_updated_at: new Date().toISOString() })
+          .eq("id", c.patient_id);
         if (attErr) {
           console.error("[contributions] attach failed:", c.patient_id, attErr.message);
           return NextResponse.json({ error: "attach_failed", message: attErr.message }, { status: 502 });

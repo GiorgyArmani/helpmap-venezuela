@@ -1336,6 +1336,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       // The publish gate (§8). Editable by all staff now (admin OR volunteer) — trusted
       // contributors whose access is revocable; their work publishes without waiting.
       verified: !!d.verified,
+      // Edit clock for the Workflow C timestamp gate: advance it on every app write so the
+      // every-poll Sheets→Supabase pipeline upsert won't clobber this edit. Separate from
+      // `updated_at` (family-facing freshness); this one is pipeline-internal. See CLAUDE.md.
+      data_updated_at: new Date().toISOString(),
     };
 
     const supabase = getSupabase();
@@ -1525,6 +1529,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       location_id: loc.location_id,
       estatus: (d.estatus as Estatus) || "INGRESADO",
       verified: !!d.verified,
+      // Edit clock for the Workflow C timestamp gate (see CLAUDE.md / savePerson).
+      data_updated_at: new Date().toISOString(),
     };
     const supabase = getSupabase();
     const person_key = ci || "resc_" + (editId ?? Date.now());
