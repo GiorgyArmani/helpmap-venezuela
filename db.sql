@@ -32,6 +32,7 @@ CREATE TABLE public.patients (
   verified boolean NOT NULL DEFAULT false,
   procedencia text,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  data_updated_at timestamp with time zone,
   CONSTRAINT patients_pkey PRIMARY KEY (id),
   CONSTRAINT patients_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(location_id)
 );
@@ -147,4 +148,37 @@ CREATE TABLE public.audit_log (
   summary text,
   meta jsonb,
   CONSTRAINT audit_log_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.missing_reports (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  apellidos text NOT NULL DEFAULT ''::text,
+  nombres text NOT NULL DEFAULT ''::text,
+  ci text,
+  edad integer,
+  zona text,
+  descripcion text,
+  reporter_name text,
+  reporter_contact text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'reviewed'::text, 'closed'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  reviewed_by uuid,
+  reviewed_at timestamp with time zone,
+  CONSTRAINT missing_reports_pkey PRIMARY KEY (id),
+  CONSTRAINT missing_reports_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.refugios (
+  location_id text NOT NULL,
+  recibe ARRAY NOT NULL DEFAULT '{}'::text[],
+  necesita text,
+  horario text,
+  responsable text,
+  fuente text,
+  address text,
+  external_id text UNIQUE,
+  es_animal boolean NOT NULL DEFAULT false,
+  last_confirmed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT refugios_pkey PRIMARY KEY (location_id),
+  CONSTRAINT refugios_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(location_id)
 );

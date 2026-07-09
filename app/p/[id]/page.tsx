@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const name = `${p.nombres} ${p.apellidos}`;
   const status = SM[p.estatus].es;
   const title = `${name} · ${status} · HelpMap Venezuela`;
-  const description = `${status} en ${p.location_name}. Mapa de emergencia humanitario · Caracas, La Guaira y Miranda.`;
+  const description = `${status} en ${p.location_name}. Mapa de emergencia humanitario · región central de Venezuela.`;
   // og:image is provided by ./opengraph-image.tsx automatically.
   return {
     title,

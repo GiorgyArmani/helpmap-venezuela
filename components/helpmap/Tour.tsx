@@ -92,7 +92,7 @@ const SLIDES: Slide[] = [
     title: { es: "Encuentra a tus seres queridos", en: "Find your loved ones" },
     body: {
       es: "Base de datos verificada de personas afectadas por los terremotos del 24 de Junio 2026, en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
-      en: "A verified database of people affected by the earthquakes in Caracas, La Guaira and Miranda, continuously updated by medical staff in the field. It helps you locate your family.",
+      en: "A verified database of people affected by the June 24, 2026 earthquakes, continuously updated by medical staff in the field. It helps you locate your family.",
     },
   },
   {

@@ -15,7 +15,7 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.helpmapvzla.net";
 const CONTACT_EMAIL = "info@helpmapvzla.net";
 
 const description =
-  "Mapa y base de datos humanitaria para ubicar a personas afectadas por el terremoto de junio de 2026 en Caracas (Distrito Capital), La Guaira y Miranda. Ayuda a familias a encontrar a sus seres queridos en hospitales y refugios, con datos verificados en campo por personal médico y voluntarios.";
+  "Mapa y base de datos humanitaria para ubicar a personas afectadas por el terremoto de junio de 2026 en la región central de Venezuela (Distrito Capital, La Guaira, Miranda y estados vecinos). Ayuda a familias a encontrar a sus seres queridos en hospitales y refugios, con datos verificados en campo por personal médico y voluntarios.";
 
 export default function StructuredData() {
   const graph = {
@@ -40,6 +40,10 @@ export default function StructuredData() {
           { "@type": "AdministrativeArea", name: "Distrito Capital, Venezuela" },
           { "@type": "AdministrativeArea", name: "La Guaira, Venezuela" },
           { "@type": "AdministrativeArea", name: "Miranda, Venezuela" },
+          { "@type": "AdministrativeArea", name: "Aragua, Venezuela" },
+          { "@type": "AdministrativeArea", name: "Carabobo, Venezuela" },
+          { "@type": "AdministrativeArea", name: "Yaracuy, Venezuela" },
+          { "@type": "AdministrativeArea", name: "Falcón, Venezuela" },
         ],
         contactPoint: {
           "@type": "ContactPoint",
