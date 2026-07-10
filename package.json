@@ -1,6 +1,6 @@
 {
   "name": "helpmap-venezuela",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "private": true,
   "scripts": {
     "dev": "node --max-old-space-size=6144 --max-http-header-size=65536 node_modules/next/dist/bin/next dev",

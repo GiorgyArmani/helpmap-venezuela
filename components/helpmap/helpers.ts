@@ -65,3 +65,36 @@ export function municipalityFromAddress(address?: Record<string, string>): strin
 
 export const initials = (p: PersonLike) =>
   ((p.nombres[0] || "") + (p.apellidos[0] || "")).toUpperCase() || "··";
+
+// Extract lat/lng from pasted text: bare "lat, lng" OR a Google/Apple Maps URL.
+// This is the reliable escape hatch when Nominatim can't find an address that DOES
+// exist in Google Maps — the admin copies the pin's coordinates or the map link and
+// pastes it here. Returns null if nothing coordinate-like is present.
+// Venezuela sanity bounds: lat ~0.6..15.9 (allow 0..17), lng ~-73..-59 (allow -74..-58).
+export function parseLatLng(text: string): { lat: number; lng: number } | null {
+  if (!text) return null;
+  const t = decodeURIComponent(text.trim());
+  const ok = (lat: number, lng: number) =>
+    isFinite(lat) && isFinite(lng) && lat >= 0 && lat <= 17 && lng >= -74 && lng <= -58
+      ? { lat, lng }
+      : null;
+
+  // Google Maps URL forms, most specific first:
+  //   .../@10.123,-66.456,17z   ·   !3d10.123!4d-66.456   ·   ?q=10.123,-66.456 / ?ll= / ?daddr=
+  const patterns = [
+    /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/, // /@lat,lng
+    /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/, // !3dlat!4dlng
+    /[?&](?:q|ll|daddr|destination|center)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/, // ?q=lat,lng
+  ];
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (m) {
+      const hit = ok(parseFloat(m[1]), parseFloat(m[2]));
+      if (hit) return hit;
+    }
+  }
+  // Bare "lat, lng" or "lat lng" (require decimals so we don't grab street numbers).
+  const bare = t.match(/^\s*(-?\d{1,2}\.\d+)\s*[, ]\s*(-?\d{1,3}\.\d+)\s*$/);
+  if (bare) return ok(parseFloat(bare[1]), parseFloat(bare[2]));
+  return null;
+}

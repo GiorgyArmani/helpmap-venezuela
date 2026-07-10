@@ -14,7 +14,7 @@ body{margin:0;background:#fff}
 .mk-on{background:var(--accent);border-color:var(--accent)}
 .mk-on .mkn{color:#fff}
 .mk-dim{opacity:.42}
-.topbar{position:absolute;left:0;right:0;top:0;z-index:600;padding:calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));display:flex;flex-direction:column;gap:9px;pointer-events:none}
+.topbar{position:absolute;left:0;right:0;top:0;z-index:600;padding:calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .hrow,.searchbar,.chips,.frow2,.maint-banner{pointer-events:auto}
 /* Maintenance notice: full-width strip above the floating header. Flows inside the
    topbar's flex column, so it pushes the rest down with no manual offset. Shown to
@@ -36,17 +36,17 @@ body{margin:0;background:#fff}
 .lang{display:flex;background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:0 3px 12px rgba(16,20,28,.12);overflow:hidden}
 .lg{border:none;background:#fff;font-size:11px;font-weight:700;color:var(--mut);padding:9px 11px;cursor:pointer}
 .lg-on{background:var(--accent);color:#fff}
-.searchbar{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 5px 18px rgba(16,20,28,.12);padding:0 13px;height:48px}
+.searchbar{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 5px 18px rgba(16,20,28,.12);padding:0 13px;height:46px}
 .searchbar .si{width:18px;height:18px;color:var(--mut);flex:0 0 auto}
 .sinput{flex:1;border:none;outline:none;font-size:16px;background:transparent;color:var(--ink);min-width:0;font-family:inherit}
 .sx{border:none;background:var(--soft2);color:var(--mut);width:21px;height:21px;border-radius:50%;font-size:11px;cursor:pointer;flex:0 0 auto}
 .frow2{display:flex;gap:8px}
-.fdrop{flex:1;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 8px rgba(16,20,28,.08);padding:0 11px;height:42px;min-width:0}
+.fdrop{flex:1;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 8px rgba(16,20,28,.08);padding:0 11px;height:40px;min-width:0}
 .fdrop svg{width:14px;height:14px;color:var(--mut);flex:0 0 auto}
 .fdrop select{flex:1;border:none;background:transparent;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--ink);outline:none;min-width:0;-webkit-appearance:none;appearance:none;text-overflow:ellipsis}
 /* Custom center picker (searchable, type-grouped) — replaces the native <select>. */
 .cpick{flex:1;position:relative;min-width:0;pointer-events:auto}
-.cpick-btn{width:100%;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 8px rgba(16,20,28,.08);padding:0 11px;height:42px;cursor:pointer;font-family:inherit}
+.cpick-btn{width:100%;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 8px rgba(16,20,28,.08);padding:0 11px;height:40px;cursor:pointer;font-family:inherit}
 .cpick-btn svg{width:14px;height:14px;color:var(--mut);flex:0 0 auto}
 .cpick-val{flex:1;text-align:left;font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .cpick-chev{transition:transform .15s}
@@ -64,9 +64,9 @@ body{margin:0;background:#fff}
 .cpick-sel,.cpick-sel:hover{background:var(--accent);color:#fff}
 .cpick-all{border-bottom:1px solid var(--line);margin-bottom:3px;font-weight:700}
 .cpick-empty{padding:16px 13px;text-align:center;color:var(--mut);font-size:12.5px}
-.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:3px}
+.chips{display:flex;justify-content:safe center;gap:7px;overflow-x:auto;padding-bottom:3px}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex:0 0 auto;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;box-shadow:0 2px 8px rgba(16,20,28,.08);padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap}
+.chip{flex:0 0 auto;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;box-shadow:0 2px 8px rgba(16,20,28,.08);padding:7px 12px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap}
 .chip-on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .cdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
 .cdot-ok{background:var(--ok)}.cdot-adm{background:var(--adm)}.cdot-dec{background:var(--dec)}
@@ -87,7 +87,9 @@ body{margin:0;background:#fff}
 .fab-opt-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
 .fab-opt-txt b{font-size:13.5px;font-weight:700;color:var(--ink)}
 .fab-opt-txt small{font-size:11.5px;color:var(--mut);line-height:1.3}
-.zoomctl{position:absolute;right:14px;bottom:calc(316px + env(safe-area-inset-bottom));z-index:605;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 5px 18px rgba(16,20,28,.18);overflow:hidden}
+/* Mobile pinch-zooms with fingers → hide the zoom buttons to keep the map clean.
+   Re-enabled on desktop (min-width:768px) where there's no touch zoom. */
+.zoomctl{display:none;position:absolute;right:14px;bottom:calc(316px + env(safe-area-inset-bottom));z-index:605;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:13px;box-shadow:0 5px 18px rgba(16,20,28,.18);overflow:hidden}
 .zbtn{width:46px;height:46px;border:none;background:#fff;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center}
 .zbtn:first-child{border-bottom:1px solid var(--line)}
 .zbtn:active{background:var(--soft)}
@@ -120,6 +122,13 @@ body{margin:0;background:#fff}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--c);flex:0 0 auto}
 .st-ok{--c:var(--ok)}.st-adm{--c:var(--adm)}.st-dec{--c:var(--dec)}
 .empty{padding:36px 26px;text-align:center;color:var(--mut);font-size:13px;line-height:1.5}
+.listprompt{padding:30px 30px}
+/* In-list status filter (hospital only) — sticky at the top of the list so it stays
+   reachable while scrolling patients. Compact, minimal chips. */
+.liststatus{position:sticky;top:0;z-index:2;display:flex;gap:6px;padding:9px 12px;background:#fff;border-bottom:1px solid var(--line);overflow-x:auto}
+.liststatus::-webkit-scrollbar{display:none}
+.lchip{flex:0 0 auto;display:flex;align-items:center;gap:5px;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap}
+.lchip-on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .overlay{position:absolute;inset:0;z-index:800;background:#fff;display:flex;flex-direction:column;animation:slideup .26s ease}
 @keyframes slideup{from{transform:translateY(16px);opacity:.3}to{transform:none;opacity:1}}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
@@ -186,6 +195,13 @@ body{margin:0;background:#fff}
 .geo-res{display:flex;align-items:flex-start;gap:8px;text-align:left;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px 11px;font-size:12.5px;line-height:1.35;color:var(--ink);cursor:pointer;font-family:inherit}
 .geo-res:active{background:var(--soft2)}
 .geo-res svg{width:15px;height:15px;color:var(--mut);flex:0 0 auto;margin-top:1px}
+/* "Ubicar tocando el mapa" — button, draggable draft pin, and the tap-mode banner. */
+.geo-pickbtn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:12px}
+.geo-pickbtn svg{width:15px;height:15px;flex:0 0 auto}
+.draftpin{width:20px;height:20px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 0 0 2px var(--accent),0 2px 9px rgba(16,20,28,.5);cursor:grab}
+.overlay-pick{display:none}
+.pickbanner{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:900;display:flex;align-items:center;gap:12px;background:var(--accent);color:#fff;border-radius:999px;padding:8px 8px 8px 18px;box-shadow:0 8px 24px rgba(16,20,28,.3);max-width:calc(100% - 24px);font-size:13px;font-weight:600;pointer-events:auto}
+.pickdone{flex:0 0 auto;background:#fff;color:var(--ink);border:none;border-radius:999px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 .seg{display:flex;gap:8px}
 .segb{flex:1;border:1px solid var(--line);background:#fff;border-radius:11px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;color:var(--mut)}
 .segb-on{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -298,6 +314,9 @@ body{margin:0;background:#fff}
 .loginhint{font-size:11.5px;color:var(--mut);line-height:1.5;display:flex;gap:9px}
 .loginhint svg{width:16px;height:16px;flex:0 0 auto;margin-top:1px}
 .lerr{color:var(--danger);font-size:12.5px;font-weight:600}
+.linkbtn{background:none;border:none;padding:0;margin-top:4px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;text-align:center;width:100%}
+.recintro{font-size:12.5px;color:var(--mut);line-height:1.5;margin:0}
+.lok{font-size:12.5px;font-weight:500;line-height:1.5;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:12px 14px}
 
 /* ===== Responsiveness ===== */
 /* Use the dynamic viewport so mobile browser chrome (address bar) doesn't crop
@@ -326,8 +345,9 @@ body{margin:0;background:#fff}
   .sheet:not(.sheet-open){height:320px}
   .sheet-open{height:calc(100dvh - 230px)}
   .handle{border-radius:18px 18px 0 0}
+  /* Bottom-right stack (no collision): Colaborar → Daños → zoom, bottom-up. */
   .fabwrap{left:auto;right:24px;bottom:24px}
-  .zoomctl{right:24px}
+  .zoomctl{display:flex;right:24px;bottom:142px}
   .overlay{left:12px;top:12px;bottom:12px;right:auto;width:430px;max-width:calc(100% - 24px);border-radius:18px;box-shadow:0 18px 54px rgba(16,20,28,.24);overflow:hidden}
   .toast{left:225px}
   /* Desktop has no touch-scroll and the scrollbar is hidden, so a horizontal
@@ -421,12 +441,6 @@ body{margin:0;background:#fff}
 .vol-check svg{width:13px;height:13px}
 .vol-ask{font-size:13.5px;line-height:1.5;color:#454a53;margin:0 0 14px}
 
-/* ---- Trust strip (field-confirmed + call for collaborators) ---- */
-.trustbar{display:flex;align-items:center;gap:9px;width:100%;margin:0 0 10px;padding:9px 11px;border:1px solid #cdedd9;background:#f1faf4;border-radius:12px;cursor:pointer;font-family:inherit;text-align:left}
-.trustbar .trust-ic{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:#1c8a4e;color:#fff;display:flex;align-items:center;justify-content:center}
-.trustbar .trust-ic svg{width:12px;height:12px}
-.trust-txt{flex:1;font-size:11px;line-height:1.35;color:#15603a;font-weight:600}
-.trust-cta{flex:0 0 auto;font-size:11.5px;font-weight:800;color:#fff;background:#1c8a4e;border-radius:8px;padding:6px 11px}
 /* Rescued-people entry bar + card accent — distinct teal (alive/rescued, hopeful),
    separate from the status-filter colors. The badge/dot inherit --c from .st-resc. */
 .rescbar{display:flex;align-items:center;gap:9px;width:100%;margin:0 0 10px;padding:10px 11px;border:1px solid #bfe3e8;background:#f0fafb;border-radius:12px;cursor:pointer;font-family:inherit;text-align:left}
@@ -501,7 +515,7 @@ textarea.finput{resize:vertical;min-height:96px;font-family:inherit;line-height:
 .infoneed-d{font-size:12px;line-height:1.45;color:#7a5a32}
 
 @media (min-width:768px){
-  .heatctl{left:auto;right:24px;bottom:calc(80px + env(safe-area-inset-bottom));align-items:flex-end}
+  .heatctl{left:auto;right:24px;bottom:calc(84px + env(safe-area-inset-bottom));align-items:flex-end}
 }
 
 /* ---- App tour ---- */

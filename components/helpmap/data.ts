@@ -188,7 +188,7 @@ export const ESTATUS_ORDER: Estatus[] = ["INGRESADO", "ALTA", "FALLECIDO"];
 
 export interface Strings {
   appName: string; tagline: string; search: string; all: string; allStates: string; allCenters: string;
-  report: string; people: string; yrs: string; noResults: string; female: string; male: string;
+  report: string; people: string; yrs: string; noResults: string; browseHint: string; female: string; male: string;
   ci: string; edad: string; sexo: string; ubic: string; type: string; municipality: string; state: string;
   verified: string; verifiedYes: string; verifiedNo: string; updated: string; share: string; seeMap: string;
   detailTitle: string; reportTitle: string; whatsapp: string; call: string;
@@ -203,9 +203,11 @@ export interface Strings {
   hasPhoto: string; yes: string; no: string; savedC: string; savedP: string; deleted: string; records: string;
   login: string; loginTitle: string; email: string; password: string; signIn: string; signOut: string;
   loginError: string; loginHint: string; adminLocalNote: string; loggedInAs: string;
+  forgotPass: string; recoverHint: string; sendLink: string; recoverSent: string; backToLogin: string;
   f_contact: string; f_minor: string; queuedOffline: string; pendingSync: string; synced: string; reqNameLoc: string;
   igCopied: string; noteMinors: string;
   f_address: string; geoSearch: string; geoSearching: string; geoFound: string; geoNotFound: string; geoHint: string; geoPick: string;
+  geoPickMap: string; geoPickHint: string; geoPickBanner: string; geoPickDone: string;
   photoBusy: string; photoError: string; removePhoto: string;
   f_procedencia: string; f_procedenciaPh: string; f_procedenciaHint: string;
   f_dataDate: string; f_dataDateHint: string;
@@ -288,6 +290,7 @@ export const T: Record<Lang, Strings> = {
     appName: "HelpMap VE", tagline: "OSINT humanitario",
     search: "Buscar por nombre, apellido o cédula", all: "Todos", allStates: "Todos los estados", allCenters: "Todos los centros",
     report: "Reportar", people: "personas", yrs: "años", noResults: "Sin resultados. Intenta con otro nombre o filtro.",
+    browseHint: "Busca un nombre o cédula, o toca un centro en el mapa para ver la lista.",
     female: "Femenino", male: "Masculino", ci: "Cédula", edad: "Edad", sexo: "Sexo", ubic: "Centro", type: "Tipo",
     municipality: "Municipio", state: "Estado", verified: "Verificado", verifiedYes: "Verificado", verifiedNo: "Sin verificar",
     updated: "Actualizado", share: "Compartir", seeMap: "Ver en el mapa", detailTitle: "Ficha de la persona",
@@ -317,6 +320,11 @@ export const T: Record<Lang, Strings> = {
     login: "Ingresar", loginTitle: "Acceso de administración", email: "Correo", password: "Contraseña",
     signIn: "Iniciar sesión", signOut: "Cerrar sesión", loginError: "Credenciales inválidas.",
     loginHint: "Sólo personal autorizado. Acceso protegido por Supabase Auth.",
+    forgotPass: "¿Olvidaste tu contraseña?",
+    recoverHint: "Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.",
+    sendLink: "Enviar enlace",
+    recoverSent: "Si ese correo tiene una cuenta, te enviamos un enlace de recuperación. Revisa tu bandeja de entrada (y la carpeta de spam).",
+    backToLogin: "← Volver a iniciar sesión",
     adminLocalNote: "Los cambios se guardan en la base de datos. El registro de auditoría (quién cambió qué) es la próxima fase.",
     loggedInAs: "Sesión",
     f_contact: "Contacto (WhatsApp/teléfono, opcional)",
@@ -328,9 +336,13 @@ export const T: Record<Lang, Strings> = {
     igCopied: "Enlace copiado. Pégalo en tu historia o perfil de Instagram.",
     noteMinors: "La información de menores de edad está estrictamente protegida: nunca mostramos sus fotos. Su visualización completa se limita exclusivamente a personal médico y familiares.",
     f_address: "Buscar por nombre o dirección", geoSearch: "Buscar", geoSearching: "Buscando…",
-    geoFound: "Ubicación encontrada. Verifica el pin en el mapa", geoNotFound: "No se encontró. Prueba con el nombre del centro o ingresa lat/lng a mano.",
-    geoHint: "Escribe el nombre del centro (ej. \"Hospital Central San Felipe\") o una dirección y pulsa Buscar. Verifica siempre el pin.",
+    geoFound: "Ubicación encontrada. Verifica el pin en el mapa", geoNotFound: "No se encontró. Abre el sitio en Google Maps, copia el enlace o las coordenadas y pégalas aquí.",
+    geoHint: "Escribe el nombre del centro o una dirección. ¿No aparece? Usa \"Ubicar en el mapa\" y toca el sitio, o pega el enlace/coordenadas de Google Maps. Verifica siempre el pin.",
     geoPick: "Varias coincidencias, elige la correcta:",
+    geoPickMap: "Ubicar tocando el mapa",
+    geoPickHint: "¿No hay coordenadas ni sale en la búsqueda? Toca este botón y marca el punto en el mapa. Luego puedes arrastrar el pin para ajustarlo.",
+    geoPickBanner: "Toca el mapa en el lugar del centro",
+    geoPickDone: "Listo",
     photoBusy: "Procesando foto…",
     photoError: "No se pudo procesar la imagen. Intenta con otra.",
     removePhoto: "Quitar foto",
@@ -594,6 +606,7 @@ export const T: Record<Lang, Strings> = {
     appName: "HelpMap VE", tagline: "Humanitarian OSINT",
     search: "Search by name, surname or ID", all: "All", allStates: "All states", allCenters: "All centers",
     report: "Report", people: "people", yrs: "yrs", noResults: "No results. Try another name or filter.",
+    browseHint: "Search a name or ID, or tap a center on the map to see the list.",
     female: "Female", male: "Male", ci: "ID (CI)", edad: "Age", sexo: "Sex", ubic: "Center", type: "Type",
     municipality: "Municipality", state: "State", verified: "Verified", verifiedYes: "Verified", verifiedNo: "Unverified",
     updated: "Updated", share: "Share", seeMap: "See on map", detailTitle: "Person record",
@@ -623,6 +636,11 @@ export const T: Record<Lang, Strings> = {
     login: "Sign in", loginTitle: "Admin access", email: "Email", password: "Password", signIn: "Sign in",
     signOut: "Sign out", loginError: "Invalid credentials.",
     loginHint: "Authorized staff only. Protected by Supabase Auth.",
+    forgotPass: "Forgot your password?",
+    recoverHint: "Enter your email and we'll send you a link to set a new password.",
+    sendLink: "Send link",
+    recoverSent: "If that email has an account, we sent a recovery link. Check your inbox (and spam folder).",
+    backToLogin: "← Back to sign in",
     adminLocalNote: "Changes are saved to the database. The audit log (who changed what) is the next phase.",
     loggedInAs: "Session",
     f_contact: "Contact (WhatsApp/phone, optional)",
@@ -634,9 +652,13 @@ export const T: Record<Lang, Strings> = {
     igCopied: "Link copied. Paste it in your Instagram story or profile.",
     noteMinors: "Minors' information is strictly protected: we never show their photos. Full visibility is limited exclusively to medical staff and family members.",
     f_address: "Search by name or address", geoSearch: "Search", geoSearching: "Searching…",
-    geoFound: "Location found. Verify the pin on the map", geoNotFound: "Not found. Try the center's name or enter lat/lng manually.",
-    geoHint: "Type the center's name (e.g. \"Hospital Central San Felipe\") or an address and tap Search. Always verify the pin.",
+    geoFound: "Location found. Verify the pin on the map", geoNotFound: "Not found. Open the place in Google Maps, copy the link or its coordinates and paste them here.",
+    geoHint: "Type the center's name or an address. Not showing? Use \"Pin on the map\" and tap the spot, or paste the Google Maps link/coordinates. Always verify the pin.",
     geoPick: "Several matches, pick the right one:",
+    geoPickMap: "Pin it on the map",
+    geoPickHint: "No coordinates and not in search? Tap this button and mark the spot on the map. You can then drag the pin to fine-tune.",
+    geoPickBanner: "Tap the map where the center is",
+    geoPickDone: "Done",
     photoBusy: "Processing photo…",
     photoError: "Couldn't process the image. Try another one.",
     removePhoto: "Remove photo",

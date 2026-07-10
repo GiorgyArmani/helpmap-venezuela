@@ -11,10 +11,12 @@ import { createClient } from "@/utils/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<"signin" | "recover">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [sent, setSent] = useState(false);
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +36,79 @@ export default function LoginPage() {
       setBusy(false);
     }
   };
+
+  const sendRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErr("");
+    try {
+      const supabase = createClient();
+      // redirectTo uses the current origin so it works in dev (localhost) and prod
+      // alike — both must be in Supabase's Redirect URLs allowlist.
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/reset`,
+      });
+      if (error) throw error;
+      // Always report success (don't reveal whether the email exists).
+      setSent(true);
+    } catch {
+      setSent(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const switchMode = (m: "signin" | "recover") => {
+    setMode(m);
+    setErr("");
+    setSent(false);
+  };
+
+  if (mode === "recover") {
+    return (
+      <div style={S.wrap}>
+        <form style={S.card} onSubmit={sendRecovery}>
+          <div style={S.brand}>
+            <span style={S.logo} />
+            <span style={S.brandName}>HelpMap Venezuela</span>
+          </div>
+          <h1 style={S.h1}>Recuperar contraseña</h1>
+          <p style={S.p}>
+            Escribe tu correo y te enviaremos un enlace para crear una contraseña nueva.
+          </p>
+
+          {sent ? (
+            <div style={S.ok}>
+              Si ese correo tiene una cuenta, te enviamos un enlace de recuperación. Revisa tu
+              bandeja de entrada (y la carpeta de spam).
+            </div>
+          ) : (
+            <>
+              <label style={S.label}>Correo</label>
+              <input
+                style={S.input}
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tucorreo@helpmapvzla.net"
+              />
+
+              {err && <div style={S.err}>{err}</div>}
+
+              <button style={S.btn} type="submit" disabled={busy || !email}>
+                {busy ? "…" : "Enviar enlace"}
+              </button>
+            </>
+          )}
+
+          <button type="button" style={S.linkBtn} onClick={() => switchMode("signin")}>
+            ← Volver a iniciar sesión
+          </button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div style={S.wrap}>
@@ -71,6 +146,10 @@ export default function LoginPage() {
           {busy ? "…" : "Iniciar sesión"}
         </button>
 
+        <button type="button" style={S.linkBtn} onClick={() => switchMode("recover")}>
+          ¿Olvidaste tu contraseña?
+        </button>
+
         <Link href="/" style={S.back}>
           ← Volver al mapa
         </Link>
@@ -90,6 +169,8 @@ const S: Record<string, React.CSSProperties> = {
   label: { display: "block", fontSize: 12, fontWeight: 600, color: "#7b818c", margin: "12px 0 6px" },
   input: { width: "100%", border: "1px solid #ebecef", borderRadius: 11, padding: "13px 12px", fontSize: 16, fontFamily: "inherit", outline: "none", background: "#fff", color: "#16191f", boxSizing: "border-box" },
   err: { marginTop: 14, fontSize: 12.5, fontWeight: 600, borderRadius: 10, padding: "10px 12px", lineHeight: 1.4, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b" },
+  ok: { marginTop: 6, fontSize: 12.5, fontWeight: 500, borderRadius: 10, padding: "12px 14px", lineHeight: 1.5, background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#065f46" },
   btn: { marginTop: 18, background: "#15181d", color: "#fff", border: "none", borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
+  linkBtn: { marginTop: 14, background: "none", border: "none", padding: 0, fontSize: 12.5, fontWeight: 600, color: "#15181d", cursor: "pointer", fontFamily: "inherit", textAlign: "center", width: "100%" },
   back: { display: "block", width: "100%", marginTop: 16, fontSize: 12.5, color: "#7b818c", textDecoration: "none", textAlign: "center" },
 };

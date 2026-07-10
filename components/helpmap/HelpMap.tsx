@@ -56,7 +56,7 @@ import { ContactView } from "./ContactView";
 import { ContributeView } from "./ContributeView";
 import { VolunteerView } from "./VolunteerView";
 import { ReportView } from "./ReportView";
-import { timeAgo, veStateFromAddress, municipalityFromAddress } from "./helpers";
+import { timeAgo, veStateFromAddress, municipalityFromAddress, parseLatLng } from "./helpers";
 import {
   INSTAGRAM_HANDLE,
   INSTAGRAM_URL,
@@ -84,7 +84,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | Estatus>("all");
   const [stateF, setStateF] = useState<"all" | VzlaState>("all");
-  const [typeF, setTypeF] = useState<"all" | LocationType>("all");
+  // Center-type filter is multi-select: empty Set = all types; toggling a chip
+  // adds/removes that type (CLAUDE.md mobile-minimal: no separate "Todos" chip).
+  const [typeF, setTypeF] = useState<Set<LocationType>>(() => new Set());
   const [locationSel, setLocationSel] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
@@ -100,6 +102,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [geoResults, setGeoResults] = useState<
     Array<{ lat: number; lng: number; label: string; address?: Record<string, string> }>
   >([]);
+  const [pickingOnMap, setPickingOnMap] = useState(false); // "ubicar tocando el mapa" mode (center form)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const draftMarkerRef = useRef<any>(null); // draggable pin for the center being placed
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [patients, setPatients] = useState<PatientPublic[]>([]);
@@ -122,6 +127,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [loginPass, setLoginPass] = useState("");
   const [loginErr, setLoginErr] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
+  const [recoverMode, setRecoverMode] = useState(false); // "forgot password" sub-view
+  const [recoverSent, setRecoverSent] = useState(false);
 
   // Volunteer management (admin) + list upload (staff)
   const [volunteers, setVolunteers] = useState<{ user_id: string; email: string }[]>([]);
@@ -233,7 +240,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const mapLocations = useMemo(
     () =>
       locations.filter(
-        (l) => !shadowedRefugios.has(l.location_id) && (typeF === "all" || l.type === typeF),
+        (l) => !shadowedRefugios.has(l.location_id) && (typeF.size === 0 || typeF.has(l.type)),
       ),
     [locations, shadowedRefugios, typeF],
   );
@@ -276,7 +283,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       const textOk = !q || norm(p.nombres + " " + p.apellidos + " " + p.ci_display).includes(q);
       const statusOk = status === "all" || p.estatus === status;
       const stateOk = stateF === "all" || p.state === stateF;
-      const typeOk = typeF === "all" || p.location_type === typeF;
+      const typeOk = typeF.size === 0 || typeF.has(p.location_type);
       return textOk && statusOk && stateOk && typeOk;
     },
     [query, status, stateF, typeF],
@@ -597,6 +604,62 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     });
   }, [mapReady, mapLocations]);
 
+  // Draggable draft pin for the center being placed. Shows whenever we're editing a
+  // center and have coordinates (from geocode, paste, or a map tap). Dragging it updates
+  // the lat/lng — the free way to fine-tune a location without any paid geocoder.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !window.L) return;
+    const L = window.L;
+    const map = mapRef.current;
+    const lat = parseFloat(draft?.lat || "");
+    const lng = parseFloat(draft?.lng || "");
+    const show = editType === "center" && isFinite(lat) && isFinite(lng);
+    if (!show) {
+      if (draftMarkerRef.current) {
+        map.removeLayer(draftMarkerRef.current);
+        draftMarkerRef.current = null;
+      }
+      return;
+    }
+    if (!draftMarkerRef.current) {
+      const icon = L.divIcon({ className: "mkwrap", html: '<div class="draftpin"></div>', iconSize: [26, 26], iconAnchor: [13, 13] });
+      const m = L.marker([lat, lng], { draggable: true, zIndexOffset: 2000, icon }).addTo(map);
+      m.on("dragend", () => {
+        const p = m.getLatLng();
+        setDraft((d) => ({ ...(d || {}), lat: p.lat.toFixed(6), lng: p.lng.toFixed(6) }));
+      });
+      draftMarkerRef.current = m;
+    } else {
+      draftMarkerRef.current.setLatLng([lat, lng]);
+    }
+  }, [mapReady, editType, draft?.lat, draft?.lng]);
+
+  // "Ubicar tocando el mapa": while active, a tap on the map sets the draft coordinates.
+  // The panel is hidden (CSS) and a floating banner guides the tap, so it works on mobile
+  // where the overlay covers the whole map.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !window.L) return;
+    const map = mapRef.current;
+    if (!pickingOnMap || editType !== "center") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onClick = (e: any) => {
+      const { lat, lng } = e.latlng;
+      setDraft((d) => ({ ...(d || {}), lat: lat.toFixed(6), lng: lng.toFixed(6) }));
+    };
+    map.on("click", onClick);
+    const container = map.getContainer();
+    container.style.cursor = "crosshair";
+    return () => {
+      map.off("click", onClick);
+      container.style.cursor = "";
+    };
+  }, [mapReady, pickingOnMap, editType]);
+
+  // Leaving the center form ends map-pick mode (avoids a stuck crosshair / hidden panel).
+  useEffect(() => {
+    if (editType !== "center" && pickingOnMap) setPickingOnMap(false);
+  }, [editType, pickingOnMap]);
+
   // Update marker icons when filters/data change.
   useEffect(() => {
     if (!mapReady || !mapRef.current || !window.L) return;
@@ -696,6 +759,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     () => patients.filter((p) => tsMatch(p) && (!locationSel || p.location_id === locationSel)),
     [patients, tsMatch, locationSel],
   );
+
+  // The status filter (Ingresado/Alta/Fallecido) is hospital-specific and now lives in
+  // the list header, shown only when a hospital center is selected. Reset it to "all"
+  // whenever the active center isn't a hospital, so a lingering status filter doesn't
+  // silently filter the map counts + list while its control is hidden.
+  useEffect(() => {
+    const isHosp = locationSel ? locById[locationSel]?.type === "hospital" : false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!isHosp) setStatus((s) => (s === "all" ? s : "all"));
+  }, [locationSel, locById]);
 
   const flyTo = (l: Location | undefined, zoom = 14) => {
     if (mapRef.current && l) mapRef.current.setView([l.lat, l.lng], zoom, { animate: false });
@@ -924,11 +997,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       if (mapRef.current && c) mapRef.current.setView(c, 11, { animate: false });
     }
   };
-  const onSelectType = (v: "all" | LocationType) => {
+  const onSelectType = (v: LocationType) => {
+    // Toggle: add the type if absent, remove it if already active (a second tap on
+    // the same chip clears it). Empty set means "all types".
+    const next = new Set(typeF);
+    if (next.has(v)) next.delete(v);
+    else next.add(v);
     const cur = locationSel ? locById[locationSel] : null;
-    // Drop the selected center if the new type filter hides its pin.
-    const keep = cur && (v === "all" || cur.type === v) ? locationSel : null;
-    setTypeF(v);
+    // Drop the selected center if the new filter set hides its pin.
+    const keep = cur && (next.size === 0 || next.has(cur.type)) ? locationSel : null;
+    setTypeF(next);
     setLocationSel(keep);
     setSheetOpen(true);
   };
@@ -1012,6 +1090,17 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const geocodeAddress = async () => {
     const term = geoQuery.trim() || draft?.canonical_name?.trim() || "";
     if (!term) return;
+    // Escape hatch: if the admin pasted coordinates or a Google/Apple Maps link, use
+    // them directly — this always resolves, even when Nominatim/Photon can't find the
+    // address. Keeps the current name (a raw coord has no POI name to fill).
+    const coords = parseLatLng(term);
+    if (coords) {
+      setDraft((d) => ({ ...(d || {}), lat: coords.lat.toFixed(6), lng: coords.lng.toFixed(6) }));
+      setGeoResults([]);
+      mapRef.current?.setView([coords.lat, coords.lng], 16, { animate: true });
+      showToast(t.geoFound);
+      return;
+    }
     const muni = draft?.municipality?.trim() || "";
     const stateName = draft?.state ? STATE_LABEL[draft.state] : "";
     // Try the most specific query first, then progressively drop the location
@@ -1048,6 +1137,44 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           .map((h) => ({ lat: parseFloat(h.lat), lng: parseFloat(h.lon), label: h.display_name, address: h.address }))
           .filter((h) => isFinite(h.lat) && isFinite(h.lng));
         if (hits.length) break;
+      }
+      // Nominatim came up empty → try Photon (Komoot), a second free OSM geocoder with
+      // different/fuzzier matching that often finds POIs Nominatim misses. Biased toward
+      // the Venezuela corridor. No API key needed.
+      if (!hits.length) {
+        try {
+          const purl =
+            "https://photon.komoot.io/api/?limit=6&lang=" +
+            (lang === "es" ? "es" : "en") +
+            "&lat=10.5&lon=-66.9&q=" +
+            encodeURIComponent(queries[0]);
+          const pres = await fetch(purl);
+          const pjson = (await pres.json()) as {
+            features?: Array<{
+              geometry?: { coordinates?: [number, number] };
+              properties?: Record<string, string>;
+            }>;
+          };
+          hits = (pjson.features || [])
+            .map((f) => {
+              const [lng, lat] = f.geometry?.coordinates || [NaN, NaN];
+              const p = f.properties || {};
+              const label = [p.name, p.street, p.district, p.city, p.state]
+                .filter(Boolean)
+                .join(", ");
+              // Photon uses OSM keys; remap to what veStateFromAddress/municipality expect.
+              const address: Record<string, string> = {
+                state: p.state || "",
+                city: p.city || "",
+                county: p.county || "",
+                municipality: p.county || p.city || "",
+              };
+              return { lat, lng, label: label || p.name || queries[0], address };
+            })
+            .filter((h) => isFinite(h.lat) && isFinite(h.lng) && h.lat >= 0 && h.lat <= 17 && h.lng >= -74 && h.lng <= -58);
+        } catch {
+          /* Photon offline — fall through to not-found */
+        }
       }
       if (!hits.length) {
         showToast(t.geoNotFound);
@@ -1620,6 +1747,24 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     await getSupabase().auth.signOut();
     clearEdit();
   };
+  // Password recovery: email a reset link that lands on /auth/reset. redirectTo uses
+  // the current origin so it works in dev and prod (both must be in Supabase's
+  // Redirect URLs allowlist). We always report success (never reveal if the email exists).
+  const sendRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginBusy(true);
+    setLoginErr("");
+    try {
+      await getSupabase().auth.resetPasswordForEmail(loginEmail.trim(), {
+        redirectTo: `${window.location.origin}/auth/reset`,
+      });
+    } catch {
+      /* ignore — still report success below */
+    } finally {
+      setRecoverSent(true);
+      setLoginBusy(false);
+    }
+  };
 
   // ---- Volunteer management (admin-only, via server API) -----------------
   const loadVolunteers = useCallback(async () => {
@@ -1857,6 +2002,12 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const rootStyle = accent ? ({ ["--accent"]: accent } as React.CSSProperties) : undefined;
 
   const selStateLoc = locationSel ? locById[locationSel] : null;
+  // Status filter belongs to the list header and only for hospitals (INGRESADO/ALTA/
+  // FALLECIDO are hospital states; refugios/comedores don't use them).
+  const showStatusFilter = selStateLoc?.type === "hospital";
+  // Keep the phone UI calm: don't render the patient list until the user has a reason
+  // to see it — a name/CI search, or a center tapped/selected (CLAUDE.md mobile focus).
+  const listActive = query.trim().length > 0 || locationSel !== null;
   // A selected center's needs card: its own refugio row, or a refugio merged onto it
   // (a coincident AcopioVE hospital-refuge that we shadowed to avoid a duplicate pin).
   const selRefugio = locationSel ? refugioById[locationSel] ?? needsForCenter[locationSel] ?? null : null;
@@ -1986,19 +2137,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         </div>
 
         {/* Center-type filter (Hospital / Refugio / Comedor / …). Data-driven from the
-            types present in the loaded locations — a new type appears automatically. */}
+            types present in the loaded locations — a new type appears automatically.
+            Multi-select toggles: no "Todos" chip; none active = all types shown. */}
         {typesAvailable.length > 1 && (
           <div className="chips">
-            <button
-              className={"chip " + (typeF === "all" ? "chip-on" : "")}
-              onClick={() => onSelectType("all")}
-            >
-              {t.allTypes}
-            </button>
             {typesAvailable.map((ty) => (
               <button
                 key={ty}
-                className={"chip " + (typeF === ty ? "chip-on" : "")}
+                className={"chip " + (typeF.has(ty) ? "chip-on" : "")}
                 onClick={() => onSelectType(ty)}
               >
                 <span className="cdot" style={{ background: TYPE_META[ty].color }}></span>
@@ -2007,22 +2153,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             ))}
           </div>
         )}
-
-        <div className="chips">
-          {chips.map((c) => (
-            <button
-              key={c.key}
-              className={"chip " + (status === c.key ? "chip-on" : "")}
-              onClick={() => {
-                setStatus(c.key);
-                setSheetOpen(true);
-              }}
-            >
-              {c.key !== "all" && <span className={"cdot " + c.dotCls}></span>}
-              {c.label}
-            </button>
-          ))}
-        </div>
 
         {stale && (
           <div className="stale">
@@ -2150,13 +2280,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           </div>
         </button>
         <div className="list">
-          {/* Trust note: dataset is field-confirmed + call for collaborators. Lives in
-              the list (contextual to the data), so it never covers the map. */}
-          <button className="trustbar" onClick={() => setView("volunteer")}>
-            <span className="trust-ic">{ICON.check}</span>
-            <span className="trust-txt">{t.trustLine}</span>
-            <span className="trust-cta">{t.trustCta}</span>
-          </button>
           {/* Rescued-people network: people pulled out alive but not yet at a center,
               so they have no map pin. Surfaced here as a list entry (CLAUDE.md §14). */}
           {rescatados.length > 0 && (
@@ -2261,32 +2384,55 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
               </div>
             </div>
           )}
-          {list.map((p) => (
-            <button key={p.id} className={"card " + SM[p.estatus].cls} onClick={() => openDetail(p)}>
-              <Avatar p={p} cls="av" />
-              <div className="cmid">
-                <span className="cname">
-                  {p.nombres + " " + p.apellidos}
-                  {p.verified && <span className="vchk"> {ICON.check}</span>}
-                </span>
-                <span className="cmeta">
-                  {[p.edad != null ? p.edad + " " + t.yrs : null, p.sexo].filter(Boolean).join(" · ")}
-                </span>
-                <span className="cloc">
-                  {ICON.pin}
-                  {p.location_name}
-                </span>
-              </div>
-              <div className="cend">
-                <span className="badge">
-                  <span className="dot"></span>
-                  {SM[p.estatus][lang]}
-                </span>
-                {ICON.chevR}
-              </div>
-            </button>
-          ))}
-          {list.length === 0 && !showDonationInfo && <div className="empty">{t.noResults}</div>}
+          {/* Status filter (Ingresado / Alta / Fallecido) lives in the list header, next
+              to the data it filters, and only for a hospital (CLAUDE.md mobile focus). */}
+          {showStatusFilter && (
+            <div className="liststatus">
+              {chips.map((c) => (
+                <button
+                  key={c.key}
+                  className={"lchip " + (status === c.key ? "lchip-on" : "")}
+                  onClick={() => {
+                    setStatus(c.key);
+                    setSheetOpen(true);
+                  }}
+                >
+                  {c.key !== "all" && <span className={"cdot " + c.dotCls}></span>}
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* Idle (no search, no center): keep the sheet minimal — prompt instead of a
+              full list, so the phone UI isn't buried under hundreds of cards. */}
+          {!listActive && <div className="empty listprompt">{t.browseHint}</div>}
+          {listActive &&
+            list.map((p) => (
+              <button key={p.id} className={"card " + SM[p.estatus].cls} onClick={() => openDetail(p)}>
+                <Avatar p={p} cls="av" />
+                <div className="cmid">
+                  <span className="cname">
+                    {p.nombres + " " + p.apellidos}
+                    {p.verified && <span className="vchk"> {ICON.check}</span>}
+                  </span>
+                  <span className="cmeta">
+                    {[p.edad != null ? p.edad + " " + t.yrs : null, p.sexo].filter(Boolean).join(" · ")}
+                  </span>
+                  <span className="cloc">
+                    {ICON.pin}
+                    {p.location_name}
+                  </span>
+                </div>
+                <div className="cend">
+                  <span className="badge">
+                    <span className="dot"></span>
+                    {SM[p.estatus][lang]}
+                  </span>
+                  {ICON.chevR}
+                </div>
+              </button>
+            ))}
+          {listActive && list.length === 0 && !showDonationInfo && <div className="empty">{t.noResults}</div>}
           {/* Comedor (WCK free kitchen): an explanatory info pin — no patient list.
               Clear branded card + directions + a prompt to donate (WCK is in "Donar"). */}
           {list.length === 0 && showDonationInfo && selStateLoc && !selRefugio && selStateLoc.type === "comedor" && (
@@ -2434,8 +2580,18 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       )}
 
       {/* ---- Admin overlay (Supabase Auth protected) ---- */}
+      {/* Floating guide while placing a center by tapping the map (panel hidden below). */}
+      {pickingOnMap && (
+        <div className="pickbanner">
+          <span>{t.geoPickBanner}</span>
+          <button type="button" className="pickdone" onClick={() => setPickingOnMap(false)}>
+            {t.geoPickDone}
+          </button>
+        </div>
+      )}
+
       {view === "admin" && (
-        <div className="overlay">
+        <div className={"overlay" + (pickingOnMap ? " overlay-pick" : "")}>
           <div className="ovhead">
             <button
               className="oicon"
@@ -2465,41 +2621,90 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
           {!user ? (
             <div className="loginwrap">
-              <form className="form" onSubmit={signIn}>
-                <div className="fld">
-                  <span className="flabel">{t.email}</span>
-                  <input
-                    className="finput"
-                    type="email"
-                    autoComplete="username"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="admin@helpmapvzla.net"
-                  />
-                </div>
-                <div className="fld">
-                  <span className="flabel">{t.password}</span>
-                  <input
-                    className="finput"
-                    type="password"
-                    autoComplete="current-password"
-                    value={loginPass}
-                    onChange={(e) => setLoginPass(e.target.value)}
-                    placeholder="••••••••"
-                  />
-                </div>
-                {loginErr && <span className="lerr">{loginErr}</span>}
-                <button className="btnp" type="submit" disabled={loginBusy}>
-                  {loginBusy ? "…" : t.signIn}
-                </button>
-              </form>
-              <div className="loginhint">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="4" y="11" width="16" height="9" rx="2" />
-                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                </svg>
-                {t.loginHint}
-              </div>
+              {recoverMode ? (
+                <form className="form" onSubmit={sendRecovery}>
+                  <p className="recintro">{t.recoverHint}</p>
+                  {recoverSent ? (
+                    <div className="lok">{t.recoverSent}</div>
+                  ) : (
+                    <>
+                      <div className="fld">
+                        <span className="flabel">{t.email}</span>
+                        <input
+                          className="finput"
+                          type="email"
+                          autoComplete="username"
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          placeholder="tucorreo@helpmapvzla.net"
+                        />
+                      </div>
+                      <button className="btnp" type="submit" disabled={loginBusy || !loginEmail}>
+                        {loginBusy ? "…" : t.sendLink}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="linkbtn"
+                    onClick={() => {
+                      setRecoverMode(false);
+                      setRecoverSent(false);
+                      setLoginErr("");
+                    }}
+                  >
+                    {t.backToLogin}
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <form className="form" onSubmit={signIn}>
+                    <div className="fld">
+                      <span className="flabel">{t.email}</span>
+                      <input
+                        className="finput"
+                        type="email"
+                        autoComplete="username"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="admin@helpmapvzla.net"
+                      />
+                    </div>
+                    <div className="fld">
+                      <span className="flabel">{t.password}</span>
+                      <input
+                        className="finput"
+                        type="password"
+                        autoComplete="current-password"
+                        value={loginPass}
+                        onChange={(e) => setLoginPass(e.target.value)}
+                        placeholder="••••••••"
+                      />
+                    </div>
+                    {loginErr && <span className="lerr">{loginErr}</span>}
+                    <button className="btnp" type="submit" disabled={loginBusy}>
+                      {loginBusy ? "…" : t.signIn}
+                    </button>
+                    <button
+                      type="button"
+                      className="linkbtn"
+                      onClick={() => {
+                        setRecoverMode(true);
+                        setLoginErr("");
+                      }}
+                    >
+                      {t.forgotPass}
+                    </button>
+                  </form>
+                  <div className="loginhint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="4" y="11" width="16" height="9" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                    {t.loginHint}
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -3124,6 +3329,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                         <input className="finput mono" value={draft?.lng || ""} onChange={setD("lng")} placeholder="-66.90" inputMode="decimal" />
                       </div>
                     </div>
+                    <button type="button" className="btng geo-pickbtn" onClick={() => setPickingOnMap(true)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 21s-6-5.7-6-10a6 6 0 0 1 12 0c0 4.3-6 10-6 10Z" />
+                        <circle cx="12" cy="11" r="2" />
+                      </svg>
+                      {t.geoPickMap}
+                    </button>
+                    <span className="fhint">{t.geoPickHint}</span>
                     {/* Refugio needs: only for shelters. Editable by staff so each
                         refugio's differing needs stay current (AcopioVE, §14). */}
                     {draft?.type === "shelter" && (
