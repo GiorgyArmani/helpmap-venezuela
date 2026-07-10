@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node --max-old-space-size=6144 node_modules/next/dist/bin/next dev",
+    "dev": "node --max-old-space-size=6144 --max-http-header-size=65536 node_modules/next/dist/bin/next dev",
     "dev:default": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node --max-http-header-size=65536 node_modules/next/dist/bin/next start",
     "lint": "eslint"
   },
   "dependencies": {

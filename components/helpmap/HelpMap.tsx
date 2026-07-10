@@ -43,6 +43,8 @@ import Tour from "./Tour";
 import "./helpmap.css";
 
 import { ICON } from "./icons";
+import { CenterPicker } from "./CenterPicker";
+import { StatePicker } from "./StatePicker";
 import { Avatar } from "./Avatar";
 import { RescuedView } from "./RescuedView";
 import { RefugiosView } from "./RefugiosView";
@@ -82,6 +84,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | Estatus>("all");
   const [stateF, setStateF] = useState<"all" | VzlaState>("all");
+  const [typeF, setTypeF] = useState<"all" | LocationType>("all");
   const [locationSel, setLocationSel] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
@@ -228,8 +231,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // Locations that get a map pin — shadowed refugios are merged onto their coincident
   // center, so they don't stack a duplicate pin.
   const mapLocations = useMemo(
-    () => locations.filter((l) => !shadowedRefugios.has(l.location_id)),
-    [locations, shadowedRefugios],
+    () =>
+      locations.filter(
+        (l) => !shadowedRefugios.has(l.location_id) && (typeF === "all" || l.type === typeF),
+      ),
+    [locations, shadowedRefugios, typeF],
   );
 
   // Refugio needs list (the "cómo colaborar" surface). Join each refugio to its location
@@ -256,15 +262,24 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     return Array.from(set).sort();
   }, [locations]);
 
+  // Data-driven list of center types present in the loaded locations, in TYPE_META order
+  // (so new types — comedor, morgue… — surface as a filter chip automatically once rows exist).
+  const typesAvailable = useMemo(() => {
+    const present = new Set<LocationType>();
+    locations.forEach((l) => present.add(l.type));
+    return (Object.keys(TYPE_META) as LocationType[]).filter((t) => present.has(t));
+  }, [locations]);
+
   const tsMatch = useCallback(
     (p: PatientPublic) => {
       const q = norm(query.trim());
       const textOk = !q || norm(p.nombres + " " + p.apellidos + " " + p.ci_display).includes(q);
       const statusOk = status === "all" || p.estatus === status;
       const stateOk = stateF === "all" || p.state === stateF;
-      return textOk && statusOk && stateOk;
+      const typeOk = typeF === "all" || p.location_type === typeF;
+      return textOk && statusOk && stateOk && typeOk;
     },
-    [query, status, stateF],
+    [query, status, stateF, typeF],
   );
 
   const showToast = useCallback((msg: string) => {
@@ -598,11 +613,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       // show a heart glyph so it stays a live "help point". A center that ALSO carries
       // merged refugio needs keeps its patient count (it's a real center first).
       const isRefugio = !!refugioById[l.location_id];
-      const dim = vis.length === 0 && !isRefugio;
-      // Pin color reflects the location TYPE (hospital/shelter/morgue/acopio), not the
+      // Info points (no patient tracking: comedor, donation_centre) and refugios must NOT
+      // dim or show a bare "0" (that reads as "closed / nobody"); they stay live "help points".
+      const isInfoPoint = !TYPE_META[l.type].hasPatients || isRefugio;
+      const dim = vis.length === 0 && !isInfoPoint;
+      // Pin color reflects the location TYPE (hospital/shelter/comedor/morgue/acopio), not the
       // worst patient status — so the count badge reads as data, not as a death toll.
       const color = TYPE_META[l.type].color;
-      const label = vis.length === 0 && isRefugio ? "&#9829;" : vis.length;
+      const label = vis.length > 0 ? vis.length : isInfoPoint ? "&#9829;" : 0;
       m.setIcon(mkIcon(L, label, color, active, dim));
       m.setZIndexOffset(active ? 1000 : dim ? -100 : 0);
     });
@@ -895,8 +913,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     return [lat, lng];
   };
 
-  const onSelectState = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const v = e.target.value as "all" | VzlaState;
+  const pickState = (v: "all" | VzlaState) => {
     const cur = locationSel ? locById[locationSel] : null;
     const keep = cur && (v === "all" || cur.state === v) ? locationSel : null;
     setStateF(v);
@@ -907,9 +924,15 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       if (mapRef.current && c) mapRef.current.setView(c, 11, { animate: false });
     }
   };
-  const onSelectCenter = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const v = e.target.value;
-    const id = v === "all" ? null : v;
+  const onSelectType = (v: "all" | LocationType) => {
+    const cur = locationSel ? locById[locationSel] : null;
+    // Drop the selected center if the new type filter hides its pin.
+    const keep = cur && (v === "all" || cur.type === v) ? locationSel : null;
+    setTypeF(v);
+    setLocationSel(keep);
+    setSheetOpen(true);
+  };
+  const pickCenter = (id: string | null) => {
     setLocationSel(id);
     setSheetOpen(true);
     if (id) flyTo(locById[id]);
@@ -1786,7 +1809,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // hospital → no pin of their own, selecting one would fly nowhere). Honors the state filter.
   const centerFilterGroups = useMemo(() => {
     const inState = mapLocations.filter((l) => stateF === "all" || l.state === stateF);
-    const order: LocationType[] = ["hospital", "shelter", "morgue", "donation_centre"];
+    const order: LocationType[] = ["hospital", "shelter", "comedor", "morgue", "donation_centre"];
     return order
       .map((type) => ({
         type,
@@ -1838,7 +1861,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // (a coincident AcopioVE hospital-refuge that we shadowed to avoid a duplicate pin).
   const selRefugio = locationSel ? refugioById[locationSel] ?? needsForCenter[locationSel] ?? null : null;
   const showDonationInfo =
-    !!selStateLoc && (selStateLoc.type === "donation_centre" || (list.length === 0 && !query && status === "all"));
+    !!selStateLoc &&
+    (selStateLoc.type === "donation_centre" ||
+      selStateLoc.type === "comedor" ||
+      (list.length === 0 && !query && status === "all"));
 
   return (
     <div className="app" style={rootStyle}>
@@ -1948,35 +1974,39 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         </div>
 
         <div className="frow2">
-          <div className="fdrop">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 21h18M5 21V8l5-4 5 4M19 21V11l-4-3M9 21v-4h2v4" />
-            </svg>
-            <select value={stateF} onChange={onSelectState}>
-              <option value="all">{t.allStates}</option>
-              {statesAvailable.map((s) => (
-                <option key={s} value={s}>
-                  {STATE_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="fdrop">
-            {ICON.pin}
-            <select value={locationSel || "all"} onChange={onSelectCenter}>
-              <option value="all">{t.allCenters}</option>
-              {centerFilterGroups.map((g) => (
-                <optgroup key={g.type} label={TYPE_META[g.type][lang]}>
-                  {g.items.map((l) => (
-                    <option key={l.location_id} value={l.location_id}>
-                      {l.canonical_name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
+          <StatePicker t={t} states={statesAvailable} value={stateF} onPick={pickState} />
+          <CenterPicker
+            t={t}
+            lang={lang}
+            groups={centerFilterGroups}
+            valueId={locationSel}
+            locById={locById}
+            onPick={pickCenter}
+          />
         </div>
+
+        {/* Center-type filter (Hospital / Refugio / Comedor / …). Data-driven from the
+            types present in the loaded locations — a new type appears automatically. */}
+        {typesAvailable.length > 1 && (
+          <div className="chips">
+            <button
+              className={"chip " + (typeF === "all" ? "chip-on" : "")}
+              onClick={() => onSelectType("all")}
+            >
+              {t.allTypes}
+            </button>
+            {typesAvailable.map((ty) => (
+              <button
+                key={ty}
+                className={"chip " + (typeF === ty ? "chip-on" : "")}
+                onClick={() => onSelectType(ty)}
+              >
+                <span className="cdot" style={{ background: TYPE_META[ty].color }}></span>
+                {TYPE_META[ty][lang]}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="chips">
           {chips.map((c) => (
@@ -2257,8 +2287,34 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             </button>
           ))}
           {list.length === 0 && !showDonationInfo && <div className="empty">{t.noResults}</div>}
+          {/* Comedor (WCK free kitchen): an explanatory info pin — no patient list.
+              Clear branded card + directions + a prompt to donate (WCK is in "Donar"). */}
+          {list.length === 0 && showDonationInfo && selStateLoc && !selRefugio && selStateLoc.type === "comedor" && (
+            <div className="comedorcard">
+              <span className="comedorkick">{ICON.utensils}{t.comedorTitle}</span>
+              <p className="comedordesc">{t.comedorDesc}</p>
+              <div className="comedorhours">{ICON.clock}{t.comedorHours}</div>
+              <div className="dactions">
+                <a
+                  className="btnp"
+                  href={mapsDirectionsUrl(selStateLoc.lat, selStateLoc.lng)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {ICON.pin}
+                  {t.directions}
+                </a>
+                <button className="btng" onClick={() => setView("donate")}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z" />
+                  </svg>
+                  {t.comedorDonate}
+                </button>
+              </div>
+            </div>
+          )}
           {/* refcard already carries the info + contact actions for refugios. */}
-          {list.length === 0 && showDonationInfo && selStateLoc && !selRefugio && (
+          {list.length === 0 && showDonationInfo && selStateLoc && !selRefugio && selStateLoc.type !== "comedor" && (
             <div className="locinfo">
               <div className="empty">
                 {selStateLoc.type === "donation_centre" ? t.donationInfo : t.noPatientsHere}

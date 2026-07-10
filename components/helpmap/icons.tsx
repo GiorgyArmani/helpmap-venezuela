@@ -126,4 +126,10 @@ export const ICON = {
       <path d="M12 7v5l3 2" />
     </svg>
   ),
+  utensils: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3M6 12v9" />
+      <path d="M18 3c-1.7 0-3 2-3 5s1 4 3 4v9" />
+    </svg>
+  ),
 };

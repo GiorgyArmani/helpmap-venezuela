@@ -10,7 +10,7 @@ export type VzlaState =
   | "falcon"
   | "carabobo"
   | "aragua";
-export type LocationType = "hospital" | "shelter" | "morgue" | "donation_centre";
+export type LocationType = "hospital" | "shelter" | "morgue" | "donation_centre" | "comedor";
 export type Estatus = "INGRESADO" | "ALTA" | "FALLECIDO";
 export type Sexo = "M" | "F";
 export type Lang = "es" | "en";
@@ -164,6 +164,10 @@ export const TYPE_META: Record<LocationType, TypeMeta> = {
   shelter: { es: "Refugio", en: "Shelter", hasPatients: true, color: "oklch(0.68 0.15 70)" },
   morgue: { es: "Morgue", en: "Morgue", hasPatients: true, color: "oklch(0.5 0.03 280)" },
   donation_centre: { es: "Centro de acopio", en: "Donation centre", hasPatients: false, color: "oklch(0.6 0.15 300)" },
+  // Comedor = free community kitchen (e.g. World Central Kitchen). Informational pin,
+  // no patients — like donation_centre. Teal color: distinct from the status filters
+  // (blue/green/gray in SM) AND the other type colors (red/amber/gray/purple).
+  comedor: { es: "Comedor", en: "Free kitchen", hasPatients: false, color: "oklch(0.64 0.12 190)" },
 };
 
 export interface StatusMeta {
@@ -188,7 +192,8 @@ export interface Strings {
   ci: string; edad: string; sexo: string; ubic: string; type: string; municipality: string; state: string;
   verified: string; verifiedYes: string; verifiedNo: string; updated: string; share: string; seeMap: string;
   detailTitle: string; reportTitle: string; whatsapp: string; call: string;
-  noPatientsHere: string; donationInfo: string; staleData: string;
+  noPatientsHere: string; donationInfo: string; allTypes: string; centerSearch: string; staleData: string;
+  comedorTitle: string; comedorDesc: string; comedorHours: string; comedorDonate: string;
   f_ape: string; f_nom: string; f_ci: string; f_edad: string; f_sexo: string; f_ubic: string;
   f_photo: string; f_photoHint: string; selectHosp: string; submit: string; note: string; sent: string;
   shareTitle: string; shareDesc: string; cardKicker: string; copyLink: string; copied: string; updatedAgo: string;
@@ -289,6 +294,13 @@ export const T: Record<Lang, Strings> = {
     reportTitle: "Aportar datos", whatsapp: "WhatsApp", call: "Llamar",
     noPatientsHere: "Aún no hay personas registradas en este centro.",
     donationInfo: "Centro de acopio · información de contacto",
+    allTypes: "Todos los tipos",
+    centerSearch: "Buscar centro…",
+    comedorTitle: "Comedor gratuito",
+    comedorDesc:
+      "Administrado por World Central Kitchen. Comida caliente y gratuita para quien la necesite; no hace falta registrarse ni buscar a nadie en una lista.",
+    comedorHours: "Comida servida de 12:00 a 1:30 p. m. (hora local).",
+    comedorDonate: "Apoyar a World Central Kitchen",
     staleData: "Datos posiblemente desactualizados (sin conexión)",
     f_ape: "Apellidos", f_nom: "Nombres", f_ci: "Cédula (CI)", f_edad: "Edad", f_sexo: "Sexo",
     f_ubic: "Centro / ubicación", f_photo: "Foto", f_photoHint: "Toca para subir una foto (solo adultos)",
@@ -588,6 +600,13 @@ export const T: Record<Lang, Strings> = {
     reportTitle: "Add data", whatsapp: "WhatsApp", call: "Call",
     noPatientsHere: "No people registered at this center yet.",
     donationInfo: "Donation centre · contact information",
+    allTypes: "All types",
+    centerSearch: "Search center…",
+    comedorTitle: "Free community kitchen",
+    comedorDesc:
+      "Run by World Central Kitchen. Free hot meals for anyone who needs them — no registration and no searching a list.",
+    comedorHours: "Meals served 12:00–1:30 p.m. (local time).",
+    comedorDonate: "Support World Central Kitchen",
     staleData: "Data may be out of date (offline)",
     f_ape: "Surname", f_nom: "First names", f_ci: "ID (CI)", f_edad: "Age", f_sexo: "Sex",
     f_ubic: "Center / location", f_photo: "Photo", f_photoHint: "Tap to upload a photo (adults only)",
