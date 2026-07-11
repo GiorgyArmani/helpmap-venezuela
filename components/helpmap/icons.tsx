@@ -2,6 +2,9 @@
 // (`{ICON.pin}`). Kept in its own module so the big component doesn't recompile these on
 // every edit. Icons inherit color via `currentColor`; size comes from CSS.
 
+import type { ReactNode } from "react";
+import type { LocationType } from "./data";
+
 export const ICON = {
   back: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -132,4 +135,52 @@ export const ICON = {
       <path d="M18 3c-1.7 0-3 2-3 5s1 4 3 4v9" />
     </svg>
   ),
+  // Location-type icons — one per LocationType, used anywhere a center's type is
+  // labelled (filter chips, center picker, person detail) instead of a plain color dot.
+  hospital: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="4" width="17" height="17" rx="2" />
+      <path d="M12 8.5v7M8.5 12h7" />
+    </svg>
+  ),
+  shelter: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M5.5 10.5V20h13v-9.5" />
+      <path d="M9.5 20v-6h5v6" />
+    </svg>
+  ),
+  // Memorial arch — respectful, non-graphic stand-in for a morgue.
+  morgue: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 21V10.5a6 6 0 0 1 12 0V21" />
+      <path d="M4.5 21h15" />
+    </svg>
+  ),
+};
+
+// Maps each LocationType to its icon in `ICON`, so any list/legend/filter that shows a
+// center type can render a real icon instead of a plain color dot.
+export const TYPE_ICON: Record<LocationType, ReactNode> = {
+  hospital: ICON.hospital,
+  shelter: ICON.shelter,
+  morgue: ICON.morgue,
+  donation_centre: ICON.box,
+  comedor: ICON.utensils,
+};
+
+// Same glyphs as `TYPE_ICON`, as raw SVG markup strings — Leaflet map markers are built
+// as plain HTML (via L.divIcon), not React, so they can't render JSX. Stroke is a touch
+// thicker than the React versions since these render very small on the map pin.
+export const TYPE_ICON_SVG: Record<LocationType, string> = {
+  hospital:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="17" rx="2"/><path d="M12 8.5v7M8.5 12h7"/></svg>',
+  shelter:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M9.5 20v-6h5v6"/></svg>',
+  morgue:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V10.5a6 6 0 0 1 12 0V21"/><path d="M4.5 21h15"/></svg>',
+  donation_centre:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>',
+  comedor:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3M6 12v9"/><path d="M18 3c-1.7 0-3 2-3 5s1 4 3 4v9"/></svg>',
 };

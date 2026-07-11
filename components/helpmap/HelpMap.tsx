@@ -42,7 +42,7 @@ import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-import { ICON } from "./icons";
+import { ICON, TYPE_ICON, TYPE_ICON_SVG } from "./icons";
 import { CenterPicker } from "./CenterPicker";
 import { StatePicker } from "./StatePicker";
 import { Avatar } from "./Avatar";
@@ -564,20 +564,22 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   }, [onMarker]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mkIcon = (L: any, count: number | string, color: string, active: boolean, dim: boolean) =>
+  const mkIcon = (L: any, count: number | string, color: string, active: boolean, dim: boolean, type: LocationType) =>
     L.divIcon({
       className: "mkwrap",
       html:
         '<div class="mk' +
         (active ? " mk-on" : "") +
         (dim ? " mk-dim" : "") +
-        '"><span class="mkdot" style="background:' +
+        '"><span class="mkico" style="color:' +
         color +
-        '"></span><span class="mkn mono">' +
+        '">' +
+        TYPE_ICON_SVG[type] +
+        '</span><span class="mkn mono">' +
         count +
         "</span></div>",
-      iconSize: [42, 26],
-      iconAnchor: [21, 26],
+      iconSize: [48, 26],
+      iconAnchor: [24, 26],
     });
 
   // Create / remove / move markers when locations change.
@@ -595,7 +597,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     });
     mapLocations.forEach((l) => {
       if (!markers[l.location_id]) {
-        const m = L.marker([l.lat, l.lng], { icon: mkIcon(L, 0, TYPE_META[l.type].color, false, false) }).addTo(map);
+        const m = L.marker([l.lat, l.lng], { icon: mkIcon(L, 0, TYPE_META[l.type].color, false, false, l.type) }).addTo(map);
         m.on("click", () => onMarkerRef.current(l.location_id));
         markers[l.location_id] = m;
       } else {
@@ -684,7 +686,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       // worst patient status — so the count badge reads as data, not as a death toll.
       const color = TYPE_META[l.type].color;
       const label = vis.length > 0 ? vis.length : isInfoPoint ? "&#9829;" : 0;
-      m.setIcon(mkIcon(L, label, color, active, dim));
+      m.setIcon(mkIcon(L, label, color, active, dim, l.type));
       m.setZIndexOffset(active ? 1000 : dim ? -100 : 0);
     });
   }, [mapReady, mapLocations, patients, tsMatch, locationSel, focusId, refugioById]);
@@ -2147,7 +2149,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 className={"chip " + (typeF.has(ty) ? "chip-on" : "")}
                 onClick={() => onSelectType(ty)}
               >
-                <span className="cdot" style={{ background: TYPE_META[ty].color }}></span>
+                <span className="tico" style={{ color: TYPE_META[ty].color }}>{TYPE_ICON[ty]}</span>
                 {TYPE_META[ty][lang]}
               </button>
             ))}
