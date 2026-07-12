@@ -17,7 +17,7 @@ type Slide = {
   icon?: React.ReactNode;
   // When set, the slide shows a prominent CTA button (e.g. the volunteer signup).
   // Reinforces the "tap the icon above" copy with a direct one-tap action.
-  cta?: "volunteer";
+  cta?: "volunteer" | "donate";
 };
 
 const I = {
@@ -232,6 +232,21 @@ const SLIDES: Slide[] = [
     ],
   },
   {
+    eyebrow: { es: "Dona", en: "Donate", pt: "Doe" },
+    title: {
+      es: "Apoya a quien está en el terreno",
+      en: "Support those on the ground",
+      pt: "Apoie quem está no terreno",
+    },
+    body: {
+      es: "Toca el botón «Donar» (el corazón, arriba a la derecha) para ver refugios y organizaciones que reciben comida y medicinas verificadas. Cada ficha indica qué necesitan ahora y cómo donarles directamente. Tu ayuda llega a las familias afectadas.",
+      en: "Tap the “Donate” button (the heart, top right) to see shelters and organizations receiving verified food and medicine. Each card shows what they need now and how to donate to them directly. Your help reaches affected families.",
+      pt: "Toque no botão «Doar» (o coração, no canto superior direito) para ver abrigos e organizações que recebem comida e remédios verificados. Cada ficha indica o que precisam agora e como doar diretamente. Sua ajuda chega às famílias afetadas.",
+    },
+    icon: I.heart,
+    cta: "donate",
+  },
+  {
     eyebrow: { es: "Súmate", en: "Join us", pt: "Junte-se a nós" },
     title: {
       es: "¿Eres personal de salud o rescate?",
@@ -338,6 +353,7 @@ export default function Tour({
   onClose,
   onLogin,
   onVolunteer,
+  onDonate,
   variant = "public",
 }: {
   open: boolean;
@@ -347,6 +363,8 @@ export default function Tour({
   onLogin?: () => void;
   // Opens the volunteer signup panel. Powers the CTA button on the "Súmate" slide.
   onVolunteer?: () => void;
+  // Opens the donations panel. Powers the CTA button on the "Dona" slide.
+  onDonate?: () => void;
   // "public" = first-run visitor tour; "staff" = volunteer/admin onboarding on sign-in.
   variant?: "public" | "staff";
 }) {
@@ -389,6 +407,13 @@ export default function Tour({
           <button className="tour-cta" onClick={onVolunteer}>
             {I.hands}
             {L({ es: "Quiero ayudar", en: "I want to help", pt: "Quero ajudar" })}
+          </button>
+        )}
+
+        {s.cta === "donate" && onDonate && (
+          <button className="tour-cta" onClick={onDonate}>
+            {I.heart}
+            {L({ es: "Quiero donar", en: "I want to donate", pt: "Quero doar" })}
           </button>
         )}
 

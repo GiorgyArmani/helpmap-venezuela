@@ -4055,6 +4055,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           closeTour();
           setView("volunteer");
         }}
+        onDonate={() => {
+          closeTour();
+          setView("donate");
+        }}
         onLogin={
           !user
             ? () => {
