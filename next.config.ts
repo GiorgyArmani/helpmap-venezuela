@@ -22,8 +22,9 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // Clickjacking: nothing here should ever be framed by another site.
           { key: "X-Frame-Options", value: "DENY" },
-          // Disable device APIs the app never uses (verified: no geolocation/camera/mic).
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), browsing-topics=()" },
+          // geolocation=(self) powers "Mi ubicación" (the blue GPS dot on the map); camera/
+          // mic stay disabled since the app never uses them.
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), browsing-topics=()" },
           // Force HTTPS on the production domain for 1 year (no-op over plain HTTP/dev).
           { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
         ],

@@ -2,6 +2,9 @@
 // (`{ICON.pin}`). Kept in its own module so the big component doesn't recompile these on
 // every edit. Icons inherit color via `currentColor`; size comes from CSS.
 
+import type { ReactNode } from "react";
+import type { Lang, LocationType } from "./data";
+
 export const ICON = {
   back: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -51,6 +54,12 @@ export const ICON = {
   check: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 6 9 17l-5-5" />
+    </svg>
+  ),
+  info: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.5v.01" />
     </svg>
   ),
   wifiOff: (
@@ -130,6 +139,89 @@ export const ICON = {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3M6 12v9" />
       <path d="M18 3c-1.7 0-3 2-3 5s1 4 3 4v9" />
+    </svg>
+  ),
+  // Location-type icons — one per LocationType, used anywhere a center's type is
+  // labelled (filter chips, center picker, person detail) instead of a plain color dot.
+  hospital: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="4" width="17" height="17" rx="2" />
+      <path d="M12 8.5v7M8.5 12h7" />
+    </svg>
+  ),
+  shelter: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M5.5 10.5V20h13v-9.5" />
+      <path d="M9.5 20v-6h5v6" />
+    </svg>
+  ),
+  // Memorial arch — respectful, non-graphic stand-in for a morgue.
+  morgue: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 21V10.5a6 6 0 0 1 12 0V21" />
+      <path d="M4.5 21h15" />
+    </svg>
+  ),
+  // GPS crosshair — "center the map on my location" button.
+  locate: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    </svg>
+  ),
+};
+
+// Maps each LocationType to its icon in `ICON`, so any list/legend/filter that shows a
+// center type can render a real icon instead of a plain color dot.
+export const TYPE_ICON: Record<LocationType, ReactNode> = {
+  hospital: ICON.hospital,
+  shelter: ICON.shelter,
+  morgue: ICON.morgue,
+  donation_centre: ICON.box,
+  comedor: ICON.utensils,
+};
+
+// Same glyphs as `TYPE_ICON`, as raw SVG markup strings — Leaflet map markers are built
+// as plain HTML (via L.divIcon), not React, so they can't render JSX. Stroke is a touch
+// thicker than the React versions since these render very small on the map pin.
+export const TYPE_ICON_SVG: Record<LocationType, string> = {
+  hospital:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="17" rx="2"/><path d="M12 8.5v7M8.5 12h7"/></svg>',
+  shelter:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M9.5 20v-6h5v6"/></svg>',
+  morgue:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V10.5a6 6 0 0 1 12 0V21"/><path d="M4.5 21h15"/></svg>',
+  donation_centre:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>',
+  comedor:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3M6 12v9"/><path d="M18 3c-1.7 0-3 2-3 5s1 4 3 4v9"/></svg>',
+};
+
+// Real (simplified, flat) flag icons for the language switcher — clearer at a glance than
+// letter-only buttons, and more reliable than emoji flags (Windows renders 🇪🇸/🇧🇷 as plain
+// two-letter codes on many builds instead of an actual flag glyph). 24x16 viewBox (3:2).
+export const FLAG_ICON: Record<Lang, ReactNode> = {
+  es: (
+    <svg viewBox="0 0 24 16" aria-hidden="true">
+      <rect width="24" height="16" fill="#AA151B" />
+      <rect y="4" width="24" height="8" fill="#F1BF00" />
+    </svg>
+  ),
+  en: (
+    <svg viewBox="0 0 24 16" aria-hidden="true">
+      <rect width="24" height="16" fill="#B22234" />
+      {[0, 2, 4, 6, 8, 10].map((y) => (
+        <rect key={y} y={y + 1.23} width="24" height="1.23" fill="#fff" />
+      ))}
+      <rect width="10.5" height="8.6" fill="#3C3B6E" />
+    </svg>
+  ),
+  pt: (
+    <svg viewBox="0 0 24 16" aria-hidden="true">
+      <rect width="24" height="16" fill="#009739" />
+      <polygon points="12,2 22,8 12,14 2,8" fill="#FEDD00" />
+      <circle cx="12" cy="8" r="3.4" fill="#012169" />
     </svg>
   ),
 };

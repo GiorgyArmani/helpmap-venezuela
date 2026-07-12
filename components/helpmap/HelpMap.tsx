@@ -37,12 +37,12 @@ import {
   telegramUrl,
   whatsappUrl,
 } from "./share";
-import { loadLeaflet, loadLeafletHeat } from "./leaflet-loader";
+import { loadLeaflet, loadLeafletHeat, loadLeafletCluster } from "./leaflet-loader";
 import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-import { ICON } from "./icons";
+import { ICON, TYPE_ICON, TYPE_ICON_SVG, FLAG_ICON } from "./icons";
 import { CenterPicker } from "./CenterPicker";
 import { StatePicker } from "./StatePicker";
 import { Avatar } from "./Avatar";
@@ -56,7 +56,7 @@ import { ContactView } from "./ContactView";
 import { ContributeView } from "./ContributeView";
 import { VolunteerView } from "./VolunteerView";
 import { ReportView } from "./ReportView";
-import { timeAgo, veStateFromAddress, municipalityFromAddress, parseLatLng } from "./helpers";
+import { timeAgo, localeOf, veStateFromAddress, municipalityFromAddress, parseLatLng } from "./helpers";
 import {
   INSTAGRAM_HANDLE,
   INSTAGRAM_URL,
@@ -76,6 +76,55 @@ import type {
   AuthUser,
   HelpMapProps,
 } from "./types";
+
+// Different types that cluster over the same metro area would otherwise stack on nearly
+// the same pixel (a hospital, shelter, comedor… pin piled on top of each other). We fan
+// each type out in a fixed direction by a few px so all of them — and their count badges —
+// stay visible. A cluster already sits at its children's average point, so a small nudge
+// is visually harmless. Order matches TYPE_META (hospital, shelter, morgue, donation, comedor).
+// Offsets form an arc wide enough that pin HEADS (where the icon lives) don't overlap a
+// neighbour: pins are 28px wide, so ≥20px horizontal spacing + vertical stagger keeps
+// each type's icon and badge readable even when all five types cluster on one metro.
+const CLUSTER_FAN: Record<LocationType, [number, number]> = {
+  hospital: [-40, -4],
+  shelter: [-20, -14],
+  morgue: [0, -18],
+  donation_centre: [20, -14],
+  comedor: [40, -4],
+};
+
+// Builds a per-type cluster badge: a location pin tinted with the type color, the type
+// icon in white inside its head, and a small count bubble. Because each map type has its
+// own cluster group, a cluster is always one type — so you can read "3 hospitales aquí"
+// at a glance instead of one anonymous mixed circle.
+// The icon AND the count badge are both NESTED INSIDE the pin's own <svg> (not
+// absolutely-positioned siblings): Leaflet marker stacking is unpredictable across
+// markers — a neighbouring fanned-out pin can paint over a separate HTML layer sitting
+// on top of it. One svg = one paint, nothing (including another marker) can cover it.
+function clusterPinHtml(type: LocationType, n: number): string {
+  const color = TYPE_META[type].color;
+  const [dx, dy] = CLUSTER_FAN[type];
+  // Type icon re-rooted inside the pin svg, forced white (its stroke is currentColor).
+  const icon = TYPE_ICON_SVG[type].replace(
+    "<svg ",
+    '<svg x="5.5" y="5" width="13" height="13" style="color:#fff" ',
+  );
+  const label = n > 99 ? "99+" : String(n);
+  const badgeR = label.length > 2 ? 9 : label.length > 1 ? 8 : 6.5;
+  const badgeFont = label.length > 2 ? 6.5 : 7.5;
+  const badge =
+    '<circle class="mkcl-badge-bg" cx="20" cy="4" r="' + badgeR + '"/>' +
+    '<text class="mkcl-badge-text" x="20" y="4.5" font-size="' + badgeFont + '">' + label + "</text>";
+  return (
+    '<div class="mkcl" style="color:' + color + ";transform:translate(" + dx + "px," + dy + 'px)">' +
+    '<svg class="mkcl-pin" viewBox="0 0 24 34" aria-hidden="true">' +
+    '<path d="M12 0C5.37 0 0 5.37 0 12c0 8.5 12 22 12 22s12-13.5 12-22C24 5.37 18.63 0 12 0z" fill="currentColor" stroke="#fff" stroke-width="1.7"/>' +
+    icon +
+    badge +
+    "</svg>" +
+    "</div>"
+  );
+}
 
 export default function HelpMap({ accent, mapLabels = true, showReport = true }: HelpMapProps) {
   const [lang, setLang] = useState<Lang>("es");
@@ -118,6 +167,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [mapReady, setMapReady] = useState(false);
   const [showHeat, setShowHeat] = useState(false); // damage heat overlay off by default (user toggles "Daños")
   const [damage, setDamage] = useState<DamageData>(SEED_DAMAGE); // USGS-fed, seed fallback
+  // "Mi ubicación": the visitor's own GPS position, shown as a blue dot so they can
+  // orient themselves on the map. Requested explicitly (button tap), never on load —
+  // asking for location permission unprompted is unexpected and often auto-denied.
+  const [myLoc, setMyLoc] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [locating, setLocating] = useState(false);
 
   // Auth
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -167,6 +221,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // Public intake form + offline queue
   // FAB "+" menu (Reportar desaparecido / Aportar datos).
   const [fabOpen, setFabOpen] = useState(false);
+  // Language switcher dropdown (flag + code button that expands to ES/EN/PT). A single
+  // trigger button keeps the header row from overflowing on mobile now that there are
+  // three languages with flag swatches, instead of three always-visible pill buttons.
+  const [langOpen, setLangOpen] = useState(false);
   // Report-a-missing-person form (the public "Reportar" flow → /api/reports).
   const [pending, setPending] = useState(() => (typeof window !== "undefined" ? queueCount() : 0));
   const [tourOpen, setTourOpen] = useState(false);
@@ -181,12 +239,20 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const mapRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markersRef = useRef<Record<string, any>>({});
+  // One L.markerClusterGroup PER type, keyed by LocationType (null if plugin failed), so
+  // clusters never mix types. e.g. clusterRef.current.hospital, .shelter, …
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clusterRef = useRef<Record<string, any> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tileLayerRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const heatRef = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const quakeLayerRef = useRef<any>(null); // aftershock markers (USGS)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const myLocMarkerRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const myLocCircleRef = useRef<any>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const getSupabase = () => {
@@ -294,6 +360,31 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(""), 1900);
   }, []);
+
+  // "Mi ubicación" button: one-shot GPS read, recenters the map and drops a blue "you
+  // are here" dot (see the marker effect below). Never runs automatically.
+  const locateMe = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      showToast(t.locateUnsupported);
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setMyLoc({ lat: latitude, lng: longitude, accuracy });
+        setLocating(false);
+        if (mapRef.current) {
+          mapRef.current.setView([latitude, longitude], Math.max(mapRef.current.getZoom(), 14), { animate: false });
+        }
+      },
+      (err) => {
+        setLocating(false);
+        showToast(err.code === err.PERMISSION_DENIED ? t.locateDenied : t.locateFailed);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+    );
+  }, [showToast, t]);
 
   // ---- Auth session ------------------------------------------------------
   useEffect(() => {
@@ -529,8 +620,48 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         ).addTo(map);
 
         map.attributionControl.setPrefix("");
-        setMapReady(true);
-        setTimeout(() => map.invalidateSize(), 220);
+
+        // Load the clustering plugin, then create the cluster group BEFORE marking the map
+        // ready — so the marker effect always finds it. Non-fatal: if the plugin CDN fails,
+        // clusterRef stays null and markers are added to the map directly (un-clustered).
+        loadLeafletCluster()
+          .catch(() => L)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .then((Lc: any) => {
+            if (cancelled || !mapRef.current) return;
+            if (Lc?.markerClusterGroup) {
+              // Build one cluster group per type so hospitals cluster only with hospitals,
+              // refugios with refugios, etc. Each renders a type-tinted location pin.
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const groups: Record<string, any> = {};
+              (Object.keys(TYPE_META) as LocationType[]).forEach((ty) => {
+                const grp = Lc.markerClusterGroup({
+                  maxClusterRadius: 80, // px: merge aggressively so a metro shows ~1 pin per type, not a pile
+                  showCoverageOnHover: false, // no purple hull polygon — noisy on mobile
+                  spiderfyOnMaxZoom: true, // spread markers sharing (nearly) identical coords
+                  disableClusteringAtZoom: 16, // street level: always show every pin
+                  zoomToBoundsOnClick: true, // tapping a cluster zooms into its pins
+                  chunkedLoading: true,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  iconCreateFunction: (cluster: any) =>
+                    Lc.divIcon({
+                      className: "mkwrap",
+                      html: clusterPinHtml(ty, cluster.getChildCount()),
+                      iconSize: [28, 37],
+                      iconAnchor: [14, 37], // tip of the pin
+                    }),
+                });
+                map.addLayer(grp);
+                groups[ty] = grp;
+              });
+              clusterRef.current = groups;
+            }
+          })
+          .finally(() => {
+            if (cancelled) return;
+            setMapReady(true);
+            setTimeout(() => map.invalidateSize(), 220);
+          });
       })
       .catch(() => {});
 
@@ -540,6 +671,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         mapRef.current.remove();
         mapRef.current = null;
         markersRef.current = {};
+        clusterRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -564,39 +696,58 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   }, [onMarker]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mkIcon = (L: any, count: number | string, color: string, active: boolean, dim: boolean) =>
+  const mkIcon = (L: any, count: number | string, color: string, active: boolean, dim: boolean, type: LocationType) =>
     L.divIcon({
       className: "mkwrap",
       html:
         '<div class="mk' +
         (active ? " mk-on" : "") +
         (dim ? " mk-dim" : "") +
-        '"><span class="mkdot" style="background:' +
+        '"><span class="mkico" style="color:' +
         color +
-        '"></span><span class="mkn mono">' +
+        '">' +
+        TYPE_ICON_SVG[type] +
+        '</span><span class="mkn mono">' +
         count +
         "</span></div>",
-      iconSize: [42, 26],
-      iconAnchor: [21, 26],
+      iconSize: [48, 26],
+      iconAnchor: [24, 26],
     });
 
-  // Create / remove / move markers when locations change.
+  // Create / remove / move markers when locations change. Each marker lives in its type's
+  // cluster group (so dense areas collapse into one per-type badge); if the cluster plugin
+  // failed to load, `groups` is null and pins are added to the map directly (un-clustered).
   useEffect(() => {
     if (!mapReady || !mapRef.current || !window.L) return;
     const L = window.L;
     const map = mapRef.current;
+    const groups = clusterRef.current;
     const markers = markersRef.current;
     const ids = new Set(mapLocations.map((l) => l.location_id));
     Object.keys(markers).forEach((id) => {
       if (!ids.has(id)) {
-        map.removeLayer(markers[id]);
+        const m = markers[id];
+        (groups ? groups[m.locType] : map).removeLayer(m);
         delete markers[id];
       }
     });
     mapLocations.forEach((l) => {
       if (!markers[l.location_id]) {
-        const m = L.marker([l.lat, l.lng], { icon: mkIcon(L, 0, TYPE_META[l.type].color, false, false) }).addTo(map);
+        const m = L.marker([l.lat, l.lng], { icon: mkIcon(L, 0, TYPE_META[l.type].color, false, false, l.type) });
+        m.locType = l.type; // remembered so we can remove it from the right per-type group
+        // Hospitals get their name pinned beside the marker (always-on, not hover-only) —
+        // they're the pin type people most need to identify at a glance among many pins.
+        if (l.type === "hospital") {
+          m.bindTooltip(l.canonical_name, {
+            permanent: true,
+            direction: "right",
+            offset: [10, -13],
+            className: "mklabel",
+            opacity: 1,
+          });
+        }
         m.on("click", () => onMarkerRef.current(l.location_id));
+        (groups ? groups[l.type] : map).addLayer(m);
         markers[l.location_id] = m;
       } else {
         markers[l.location_id].setLatLng([l.lat, l.lng]);
@@ -684,10 +835,41 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       // worst patient status — so the count badge reads as data, not as a death toll.
       const color = TYPE_META[l.type].color;
       const label = vis.length > 0 ? vis.length : isInfoPoint ? "&#9829;" : 0;
-      m.setIcon(mkIcon(L, label, color, active, dim));
+      m.setIcon(mkIcon(L, label, color, active, dim, l.type));
       m.setZIndexOffset(active ? 1000 : dim ? -100 : 0);
     });
   }, [mapReady, mapLocations, patients, tsMatch, locationSel, focusId, refugioById]);
+
+  // "Mi ubicación" marker: a blue dot (+ pulse) at the visitor's own GPS position, plus a
+  // translucent circle for the accuracy radius — the same "you are here" convention as
+  // Google/Apple Maps. Not a location pin (not clickable, no sheet), purely orientation.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !window.L || !myLoc) return;
+    const L = window.L;
+    const map = mapRef.current;
+    const pos: [number, number] = [myLoc.lat, myLoc.lng];
+    if (!myLocMarkerRef.current) {
+      const icon = L.divIcon({
+        className: "mkwrap",
+        html: '<div class="meloc"><span class="meloc-pulse"></span><span class="meloc-dot"></span></div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+      myLocMarkerRef.current = L.marker(pos, { icon, zIndexOffset: 2000, interactive: false, keyboard: false }).addTo(map);
+      myLocCircleRef.current = L.circle(pos, {
+        radius: myLoc.accuracy,
+        color: "#1a73e8",
+        weight: 1,
+        fillColor: "#1a73e8",
+        fillOpacity: 0.12,
+        interactive: false,
+      }).addTo(map);
+    } else {
+      myLocMarkerRef.current.setLatLng(pos);
+      myLocCircleRef.current.setLatLng(pos);
+      myLocCircleRef.current.setRadius(myLoc.accuracy);
+    }
+  }, [mapReady, myLoc]);
 
   // ---- Damage data: live from USGS FDSN, seed fallback (see usgsQuake.ts) ----
   useEffect(() => {
@@ -760,6 +942,14 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     [patients, tsMatch, locationSel],
   );
 
+  // Freshness of the list AS A WHOLE, not just per-card: the most recent updated_at among
+  // the visible people. Per-record "hace X" (DetailView) hides how stale the rest of a
+  // hospital's list might be — this surfaces one number for the whole selection.
+  const listFreshest = useMemo(() => {
+    if (list.length === 0) return null;
+    return list.reduce((max, p) => (p.updated_at > max ? p.updated_at : max), list[0].updated_at);
+  }, [list]);
+
   // The status filter (Ingresado/Alta/Fallecido) is hospital-specific and now lives in
   // the list header, shown only when a hospital center is selected. Reset it to "all"
   // whenever the active center isn't a hospital, so a lingering status filter doesn't
@@ -771,7 +961,19 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   }, [locationSel, locById]);
 
   const flyTo = (l: Location | undefined, zoom = 14) => {
-    if (mapRef.current && l) mapRef.current.setView([l.lat, l.lng], zoom, { animate: false });
+    const map = mapRef.current;
+    if (!map || !l) return;
+    const marker = markersRef.current[l.location_id];
+    const cluster = clusterRef.current?.[l.type];
+    // If the target pin is collapsed inside its type's cluster, expand it first so the
+    // user actually sees the center they picked (from "Ver en el mapa" / center dropdown).
+    if (marker && cluster?.zoomToShowLayer) {
+      cluster.zoomToShowLayer(marker, () => {
+        map.setView([l.lat, l.lng], Math.max(map.getZoom(), zoom), { animate: false });
+      });
+    } else {
+      map.setView([l.lat, l.lng], zoom, { animate: false });
+    }
   };
 
   const openDetail = (p: PatientPublic) => {
@@ -2079,26 +2281,63 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             <button className="gear" onClick={() => setView("volunteer")} aria-label={t.volunteer}>
               {ICON.volunteer}
             </button>
-            <button className="donate-btn" onClick={() => setView("donate")} aria-label={lang === "es" ? "Donar" : "Donate"}>
+            <button className="donate-btn" onClick={() => setView("donate")} aria-label={t.donate}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z" />
               </svg>
               <span className="donate-label">{t.donate}</span>
             </button>
-            <button className="gear" onClick={() => setTourOpen(true)} aria-label={lang === "es" ? "Cómo funciona" : "How it works"}>
+            <button
+              className="gear"
+              onClick={() => setTourOpen(true)}
+              aria-label={{ es: "Cómo funciona", en: "How it works", pt: "Como funciona" }[lang]}
+            >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="9" />
                 <path d="M9.5 9.5a2.5 2.5 0 0 1 4.5 1.5c0 1.7-2.5 2-2.5 3.5" />
                 <path d="M12 17.5h.01" />
               </svg>
             </button>
-            <div className="lang">
-              <button className={"lg " + (lang === "es" ? "lg-on" : "")} onClick={() => setLang("es")}>
-                ES
+            <div className="langwrap">
+              <button
+                className={"langbtn " + (langOpen ? "langbtn-open" : "")}
+                onClick={() => setLangOpen((o) => !o)}
+                aria-expanded={langOpen}
+                aria-label={{ es: "Cambiar idioma", en: "Change language", pt: "Mudar idioma" }[lang]}
+              >
+                <span className="lg-flag lg-flag-lg">{FLAG_ICON[lang]}</span>
+                <span className="langbtn-code">{lang.toUpperCase()}</span>
+                <svg className="langbtn-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
               </button>
-              <button className={"lg " + (lang === "en" ? "lg-on" : "")} onClick={() => setLang("en")}>
-                EN
-              </button>
+              {langOpen && (
+                <>
+                  <button className="lang-backdrop" aria-label="" onClick={() => setLangOpen(false)} />
+                  <div className="lang-menu">
+                    {(
+                      [
+                        ["es", "Español"],
+                        ["en", "English"],
+                        ["pt", "Português"],
+                      ] as const
+                    ).map(([code, name]) => (
+                      <button
+                        key={code}
+                        className={"lang-opt " + (lang === code ? "lang-opt-on" : "")}
+                        onClick={() => {
+                          setLang(code);
+                          setLangOpen(false);
+                        }}
+                      >
+                        <span className="lg-flag lg-flag-lg">{FLAG_ICON[code]}</span>
+                        <span className="lang-opt-name">{name}</span>
+                        {lang === code && <span className="lang-opt-check">{ICON.check}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -2147,7 +2386,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 className={"chip " + (typeF.has(ty) ? "chip-on" : "")}
                 onClick={() => onSelectType(ty)}
               >
-                <span className="cdot" style={{ background: TYPE_META[ty].color }}></span>
+                <span className="tico" style={{ color: TYPE_META[ty].color }}>{TYPE_ICON[ty]}</span>
                 {TYPE_META[ty][lang]}
               </button>
             ))}
@@ -2164,15 +2403,36 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
       {!view && (
         <div className="zoomctl">
-          <button className="zbtn" onClick={() => mapRef.current?.zoomIn()} aria-label={lang === "es" ? "Acercar" : "Zoom in"}>
+          <button
+            className="zbtn"
+            onClick={() => mapRef.current?.zoomIn()}
+            aria-label={{ es: "Acercar", en: "Zoom in", pt: "Aproximar" }[lang]}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <path d="M12 5v14M5 12h14" />
             </svg>
           </button>
-          <button className="zbtn" onClick={() => mapRef.current?.zoomOut()} aria-label={lang === "es" ? "Alejar" : "Zoom out"}>
+          <button
+            className="zbtn"
+            onClick={() => mapRef.current?.zoomOut()}
+            aria-label={{ es: "Alejar", en: "Zoom out", pt: "Afastar" }[lang]}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <path d="M5 12h14" />
             </svg>
+          </button>
+        </div>
+      )}
+
+      {!view && (
+        <div className="locatectl">
+          <button
+            className={"locatebtn" + (locating ? " locatebtn-busy" : "")}
+            onClick={locateMe}
+            aria-label={t.locateMe}
+            title={t.locateMe}
+          >
+            {ICON.locate}
           </button>
         </div>
       )}
@@ -2278,6 +2538,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
               <path d="m6 9 6 6 6-6" />
             </svg>
           </div>
+          {/* Whole-list freshness (not just per-card): "hace 6h" per record hides how stale
+              the rest of a hospital's list might be, so surface one number for the selection. */}
+          {listActive && listFreshest && (
+            <div className="hfresh">
+              {(locationSel && locById[locationSel]
+                ? t.listFreshnessNamed.replace("{name}", locById[locationSel]!.canonical_name)
+                : t.listFreshness
+              ).replace("{time}", timeAgo(listFreshest, lang))}
+            </div>
+          )}
         </button>
         <div className="list">
           {/* Rescued-people network: people pulled out alive but not yet at a center,
@@ -3183,7 +3453,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                             <span>{ICON.mail}{rq.email}</span>
                             {rq.telefono && <span>{ICON.phone}{rq.telefono}</span>}
                             <span className="volreq-date">
-                              {new Date(rq.created_at).toLocaleDateString(lang === "es" ? "es-VE" : "en-US")}
+                              {new Date(rq.created_at).toLocaleDateString(localeOf(lang))}
                             </span>
                           </div>
                           {rq.fuentes && (

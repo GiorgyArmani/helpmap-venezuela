@@ -1,11 +1,11 @@
 // Pure helpers for the HelpMap UI: relative time, Nominatim address → our enums, and
 // avatar initials. No React, no side effects — safe to import anywhere.
 
-import { norm, type VzlaState } from "./data";
+import { norm, type Lang, type VzlaState } from "./data";
 import type { PersonLike } from "./types";
 
 // Compact relative time ("hace 5 min"). App-runtime only (Date is fine here).
-export function timeAgo(iso: string, lang: "es" | "en"): string {
+export function timeAgo(iso: string, lang: Lang): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
   const m = Math.floor(s / 60),
     h = Math.floor(m / 60),
@@ -16,10 +16,23 @@ export function timeAgo(iso: string, lang: "es" | "en"): string {
     if (h < 24) return `hace ${h} h`;
     return `hace ${d} d`;
   }
+  if (lang === "pt") {
+    if (s < 60) return "agora mesmo";
+    if (m < 60) return `há ${m} min`;
+    if (h < 24) return `há ${h} h`;
+    return `há ${d} d`;
+  }
   if (s < 60) return "just now";
   if (m < 60) return `${m}m ago`;
   if (h < 24) return `${h}h ago`;
   return `${d}d ago`;
+}
+
+// BCP-47 locale for Date#toLocaleString/toLocaleDateString, per app Lang.
+export function localeOf(lang: Lang): string {
+  if (lang === "es") return "es-VE";
+  if (lang === "pt") return "pt-BR";
+  return "en-US";
 }
 
 // Map a Nominatim address (or the display label as fallback) to one of our VzlaState

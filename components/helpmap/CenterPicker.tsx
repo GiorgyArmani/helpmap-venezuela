@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ICON } from "./icons";
+import { ICON, TYPE_ICON } from "./icons";
 import { TYPE_META, norm, type Lang, type Location, type LocationType, type Strings } from "./data";
 
 // Custom center picker — replaces the native <select> for "Todos los centros".
@@ -96,7 +96,7 @@ export function CenterPicker({
             {filtered.map((g) => (
               <div key={g.type} className="cpick-group">
                 <div className="cpick-ghead">
-                  <span className="cpick-gdot" style={{ background: TYPE_META[g.type].color }}></span>
+                  <span className="cpick-gico" style={{ color: TYPE_META[g.type].color }}>{TYPE_ICON[g.type]}</span>
                   {TYPE_META[g.type][lang]}
                 </div>
                 {g.items.map((l) => (

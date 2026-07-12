@@ -8,10 +8,10 @@ import type { Lang } from "./data";
 // Reopenable any time from the header "?" button.
 
 type Slide = {
-  eyebrow: { es: string; en: string };
-  title: { es: string; en: string };
-  body: { es: string; en: string };
-  steps?: { t: { es: string; en: string }; d: { es: string; en: string } }[];
+  eyebrow: { es: string; en: string; pt: string };
+  title: { es: string; en: string; pt: string };
+  body: { es: string; en: string; pt: string };
+  steps?: { t: { es: string; en: string; pt: string }; d: { es: string; en: string; pt: string } }[];
   // Optional: only shown when it mirrors a real in-app icon the user taps (map pin,
   // search, share, report +, volunteer). Purely decorative slides omit it.
   icon?: React.ReactNode;
@@ -88,129 +88,160 @@ const I = {
 
 const SLIDES: Slide[] = [
   {
-    eyebrow: { es: "Bienvenido", en: "Welcome" },
-    title: { es: "Encuentra a tus seres queridos", en: "Find your loved ones" },
+    eyebrow: { es: "Bienvenido", en: "Welcome", pt: "Bem-vindo" },
+    title: { es: "Encuentra a tus seres queridos", en: "Find your loved ones", pt: "Encontre seus entes queridos" },
     body: {
       es: "Base de datos verificada de personas afectadas por los terremotos del 24 de Junio 2026, en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
       en: "A verified database of people affected by the June 24, 2026 earthquakes, continuously updated by medical staff in the field. It helps you locate your family.",
+      pt: "Base de dados verificada de pessoas afetadas pelos terremotos de 24 de junho de 2026, atualizada constantemente por profissionais de saúde em campo. Ajuda você a localizar seus familiares.",
     },
   },
   {
-    eyebrow: { es: "Paso 1", en: "Step 1" },
-    title: { es: "Explora el mapa", en: "Explore the map" },
+    eyebrow: { es: "Paso 1", en: "Step 1", pt: "Passo 1" },
+    title: { es: "Explora el mapa", en: "Explore the map", pt: "Explore o mapa" },
     body: {
       es: "Toca un punto en el mapa o filtra por estado y centro. Verás quién está reportado en cada lugar.",
       en: "Tap a point on the map or filter by state and center. You'll see who is reported at each place.",
+      pt: "Toque em um ponto do mapa ou filtre por estado e centro. Você verá quem está registrado em cada local.",
     },
     icon: I.pin,
   },
   {
-    eyebrow: { es: "Paso 2", en: "Step 2" },
-    title: { es: "Busca por nombre o cédula", en: "Search by name or ID" },
+    eyebrow: { es: "Paso 2", en: "Step 2", pt: "Passo 2" },
+    title: { es: "Busca por nombre o cédula", en: "Search by name or ID", pt: "Busque por nome ou CI" },
     body: {
       es: "Usa el buscador para encontrar a una persona por nombre, apellido o cédula. Filtra por estatus: ingresado, de alta o fallecido.",
       en: "Use the search to find a person by first name, surname or ID. Filter by status: admitted, discharged or deceased.",
+      pt: "Use a busca para encontrar uma pessoa por nome, sobrenome ou CI. Filtre por status: internado, com alta ou falecido.",
     },
     icon: I.search,
   },
   {
-    eyebrow: { es: "Importante", en: "Important" },
-    title: { es: "Cómo leer los datos", en: "How to read the data" },
+    eyebrow: { es: "Importante", en: "Important", pt: "Importante" },
+    title: { es: "Cómo leer los datos", en: "How to read the data", pt: "Como interpretar os dados" },
     body: {
       es: "Cada ficha muestra su fecha de última actualización. En una emergencia hay múltiples traslados: esta lista no garantiza que la persona siga en ese centro, pero sí la veracidad y la fecha del dato publicado. La información se actualiza a medida que llegan nuevos aportes. Úsala como herramienta de búsqueda, consulta y colaboración ciudadana.",
       en: "Each record shows its last-updated date. In an emergency there are multiple transfers: this list does not guarantee the person is still at that center, but it does guarantee the veracity and date of the published data. Information is updated as new contributions arrive. Use it as a tool for searching, consultation and citizen collaboration.",
+      pt: "Cada ficha mostra sua data de última atualização. Em uma emergência há múltiplas transferências: esta lista não garante que a pessoa continue naquele centro, mas garante a veracidade e a data do dado publicado. A informação é atualizada à medida que chegam novas contribuições. Use-a como ferramenta de busca, consulta e colaboração cidadã.",
     },
     icon: I.info,
   },
   {
-    eyebrow: { es: "Paso 3", en: "Step 3" },
-    title: { es: "Comparte para ayudar", en: "Share to help" },
+    eyebrow: { es: "Paso 3", en: "Step 3", pt: "Passo 3" },
+    title: { es: "Comparte para ayudar", en: "Share to help", pt: "Compartilhe para ajudar" },
     body: {
       es: "Comparte una ficha por WhatsApp, Telegram o como historia de Instagram. Mientras más se comparte, más rápido se reúnen las familias.",
       en: "Share a record via WhatsApp, Telegram or as an Instagram story. The more it's shared, the faster families reunite.",
+      pt: "Compartilhe uma ficha pelo WhatsApp, Telegram ou como story do Instagram. Quanto mais é compartilhada, mais rápido as famílias se reencontram.",
     },
     icon: I.share,
   },
   {
-    eyebrow: { es: "Subir información", en: "Upload information" },
-    title: { es: "Tu envío pasa por revisión", en: "Your submission is reviewed" },
+    eyebrow: { es: "Subir información", en: "Upload information", pt: "Enviar informação" },
+    title: { es: "Tu envío pasa por revisión", en: "Your submission is reviewed", pt: "Seu envio passa por revisão" },
     body: {
       es: "Si tienes datos de alguien, toca «Subir info». Tu envío NO se publica de inmediato. Sigue estos pasos antes de aparecer en el mapa:",
       en: "If you have details about someone, tap “Upload info”. Your submission is NOT published right away. It follows these steps before appearing on the map:",
+      pt: "Se você tem dados de alguém, toque em «Enviar info». Seu envio NÃO é publicado imediatamente. Ele segue estas etapas antes de aparecer no mapa:",
     },
     icon: I.plus,
     steps: [
       {
-        t: { es: "Recibido", en: "Received" },
-        d: { es: "Tu envío entra a la cola del equipo.", en: "Your submission enters the team's queue." },
+        t: { es: "Recibido", en: "Received", pt: "Recebido" },
+        d: {
+          es: "Tu envío entra a la cola del equipo.",
+          en: "Your submission enters the team's queue.",
+          pt: "Seu envio entra na fila da equipe.",
+        },
       },
       {
-        t: { es: "Limpieza", en: "Cleanup" },
+        t: { es: "Limpieza", en: "Cleanup", pt: "Triagem" },
         d: {
           es: "Se normaliza y se cruza con otros reportes para evitar duplicados.",
           en: "It's normalized and cross-checked against other reports to avoid duplicates.",
+          pt: "É normalizado e cruzado com outros reportes para evitar duplicados.",
         },
       },
       {
-        t: { es: "Verificación", en: "Verification" },
+        t: { es: "Verificación", en: "Verification", pt: "Verificação" },
         d: {
           es: "El equipo y contactos médicos lo confirman.",
           en: "The team and medical contacts confirm it.",
+          pt: "A equipe e contatos médicos confirmam a informação.",
         },
       },
       {
-        t: { es: "Publicado", en: "Published" },
+        t: { es: "Publicado", en: "Published", pt: "Publicado" },
         d: {
           es: "Solo entonces aparece en el mapa, con su sello verde «Verificado». Las fotos de menores nunca se muestran.",
           en: "Only then does it appear on the map, with its green “Verified” badge. Photos of minors are never shown.",
+          pt: "Só então aparece no mapa, com seu selo verde «Verificado». Fotos de menores nunca são exibidas.",
         },
       },
     ],
   },
   {
-    eyebrow: { es: "Nuestro compromiso", en: "Our commitment" },
-    title: { es: "Sin fines de lucro y con cuidado", en: "Non-profit and handled with care" },
+    eyebrow: { es: "Nuestro compromiso", en: "Our commitment", pt: "Nosso compromisso" },
+    title: {
+      es: "Sin fines de lucro y con cuidado",
+      en: "Non-profit and handled with care",
+      pt: "Sem fins lucrativos e com cuidado",
+    },
     body: {
       es: "Somos una iniciativa ciudadana sin fines de lucro. Esta información existe solo para reunir familias. Así protegemos los datos:",
       en: "We are a volunteer initiative. This information exists only to reunite families. This is how we protect the data:",
+      pt: "Somos uma iniciativa cidadã sem fins lucrativos. Esta informação existe apenas para reunir famílias. Assim protegemos os dados:",
     },
     steps: [
       {
-        t: { es: "No lucramos", en: "No profit" },
+        t: { es: "No lucramos", en: "No profit", pt: "Não lucramos" },
         d: {
           es: "No cobramos, no mostramos publicidad y no obtenemos beneficio de estos datos.",
           en: "We don't charge, show ads, or profit from this data.",
+          pt: "Não cobramos, não exibimos publicidade e não obtemos benefício destes dados.",
         },
       },
       {
-        t: { es: "No vendemos tus datos", en: "We don't sell your data" },
+        t: { es: "No vendemos tus datos", en: "We don't sell your data", pt: "Não vendemos seus dados" },
         d: {
           es: "La información nunca se vende ni se comparte con terceros con fines comerciales.",
           en: "The information is never sold or shared with third parties for commercial purposes.",
+          pt: "A informação nunca é vendida nem compartilhada com terceiros para fins comerciais.",
         },
       },
       {
-        t: { es: "Verificado por profesionales", en: "Verified by professionals" },
+        t: { es: "Verificado por profesionales", en: "Verified by professionals", pt: "Verificado por profissionais" },
         d: {
           es: "Cada registro es confirmado por personal médico y contactos de confianza antes de publicarse.",
           en: "Each record is confirmed by medical staff and trusted contacts before being published.",
+          pt: "Cada registro é confirmado por profissionais de saúde e contatos de confiança antes de ser publicado.",
         },
       },
       {
-        t: { es: "Protección de niños, niñas y adolescentes", en: "Protection of children and adolescents" },
+        t: {
+          es: "Protección de niños, niñas y adolescentes",
+          en: "Protection of children and adolescents",
+          pt: "Proteção de crianças e adolescentes",
+        },
         d: {
           es: "Nunca mostramos la cédula ni la foto de un menor, y limitamos sus datos al mínimo.",
           en: "We never show a minor's ID or photo, and we keep their data to a minimum.",
+          pt: "Nunca mostramos o CI nem a foto de um menor, e limitamos seus dados ao mínimo.",
         },
       },
     ],
   },
   {
-    eyebrow: { es: "Súmate", en: "Join us" },
-    title: { es: "¿Eres personal de salud o rescate?", en: "Are you health or rescue staff?" },
+    eyebrow: { es: "Súmate", en: "Join us", pt: "Junte-se a nós" },
+    title: {
+      es: "¿Eres personal de salud o rescate?",
+      en: "Are you health or rescue staff?",
+      pt: "Você é profissional de saúde ou resgate?",
+    },
     body: {
       es: "Esto es un esfuerzo ciudadano: mientras más datos confirmemos, más rápido llenamos el mapa. Si eres médico, enfermero, personal de salud o rescatista, súmate con tu perfil y tus fuentes para darte acceso.",
       en: "This is a citizen effort: the more data we confirm, the faster we fill the map. If you are a doctor, nurse, health worker or rescuer, join us with your profile and sources so we can grant you access.",
+      pt: "Este é um esforço cidadão: quanto mais dados confirmarmos, mais rápido preenchemos o mapa. Se você é médico, enfermeiro, profissional de saúde ou resgatista, junte-se a nós com seu perfil e suas fontes para liberarmos seu acesso.",
     },
     icon: I.hands,
     cta: "volunteer",
@@ -222,66 +253,80 @@ const SLIDES: Slide[] = [
 // trust model: staff changes go public immediately; access is revocable.
 const STAFF_SLIDES: Slide[] = [
   {
-    eyebrow: { es: "Eres parte del equipo", en: "You're on the team" },
-    title: { es: "Bienvenido, voluntario", en: "Welcome, volunteer" },
+    eyebrow: { es: "Eres parte del equipo", en: "You're on the team", pt: "Você faz parte da equipe" },
+    title: { es: "Bienvenido, voluntario", en: "Welcome, volunteer", pt: "Bem-vindo, voluntário" },
     body: {
       es: "Gracias por ayudar a reunir familias. Tienes acceso de confianza: lo que publiques se refleja de inmediato. Úsalo con responsabilidad; podemos revocar el acceso en cualquier momento.",
       en: "Thank you for helping reunite families. You have trusted access: what you publish reflects immediately. Use it responsibly; access can be revoked at any time.",
+      pt: "Obrigado por ajudar a reunir famílias. Você tem acesso de confiança: o que você publica reflete imediatamente. Use com responsabilidade; podemos revogar o acesso a qualquer momento.",
     },
     icon: I.hands,
   },
   {
-    eyebrow: { es: "Tu panel", en: "Your panel" },
-    title: { es: "Abre el panel del equipo", en: "Open the team panel" },
+    eyebrow: { es: "Tu panel", en: "Your panel", pt: "Seu painel" },
+    title: { es: "Abre el panel del equipo", en: "Open the team panel", pt: "Abra o painel da equipe" },
     body: {
       es: "Toca el ícono de menú (≡) arriba a la derecha. Tendrás pestañas: Centros, Personas, Listas, Donaciones y Rescatados.",
       en: "Tap the menu icon (≡) at the top right. You'll get tabs: Centers, People, Lists, Donations and Rescued.",
+      pt: "Toque no ícone de menu (≡) no canto superior direito. Você terá abas: Centros, Pessoas, Listas, Doações e Resgatados.",
     },
     icon: I.map,
   },
   {
-    eyebrow: { es: "Personas", en: "People" },
-    title: { es: "Agrega, edita y verifica", en: "Add, edit and verify" },
+    eyebrow: { es: "Personas", en: "People", pt: "Pessoas" },
+    title: { es: "Agrega, edita y verifica", en: "Add, edit and verify", pt: "Adicione, edite e verifique" },
     body: {
       es: "En «Personas» agregas o editas registros. El interruptor «Verificado» publica la foto y el estatus (incluido fallecido). Sin verificar, el registro aparece pero sin foto.",
       en: "In “People” you add or edit records. The “Verified” switch publishes the photo and status (including deceased). Unverified, a record still appears but without a photo.",
+      pt: "Em «Pessoas» você adiciona ou edita registros. O interruptor «Verificado» publica a foto e o status (incluindo falecido). Sem verificar, o registro aparece, mas sem foto.",
     },
     icon: I.shield,
     steps: [
       {
-        t: { es: "Verificado = público", en: "Verified = public" },
-        d: { es: "Solo marca verificado lo que confirmaste en campo.", en: "Only mark verified what you confirmed in the field." },
+        t: { es: "Verificado = público", en: "Verified = public", pt: "Verificado = público" },
+        d: {
+          es: "Solo marca verificado lo que confirmaste en campo.",
+          en: "Only mark verified what you confirmed in the field.",
+          pt: "Só marque como verificado o que você confirmou em campo.",
+        },
       },
       {
-        t: { es: "Menores protegidos", en: "Minors protected" },
-        d: { es: "Nunca se muestra foto ni cédula de un menor.", en: "A minor's photo and ID are never shown." },
+        t: { es: "Menores protegidos", en: "Minors protected", pt: "Menores protegidos" },
+        d: {
+          es: "Nunca se muestra foto ni cédula de un menor.",
+          en: "A minor's photo and ID are never shown.",
+          pt: "Nunca são exibidas a foto nem o CI de um menor.",
+        },
       },
     ],
   },
   {
-    eyebrow: { es: "Aportes del público", en: "Public contributions" },
-    title: { es: "Pon caras a los registros", en: "Put faces to records" },
+    eyebrow: { es: "Aportes del público", en: "Public contributions", pt: "Contribuições do público" },
+    title: { es: "Pon caras a los registros", en: "Put faces to records", pt: "Dê rostos aos registros" },
     body: {
       es: "La gente puede enviar fotos/datos de una persona. Aparecen DENTRO de la ficha de esa persona (con un contador ámbar en la lista). Ábrela y aprueba o rechaza cada aporte.",
       en: "People can submit photos/info for a person. They appear INSIDE that person's card (with an amber counter in the list). Open it and approve or reject each contribution.",
+      pt: "As pessoas podem enviar fotos/dados de alguém. Eles aparecem DENTRO da ficha dessa pessoa (com um contador âmbar na lista). Abra e aprove ou rejeite cada contribuição.",
     },
     icon: I.share,
   },
   {
-    eyebrow: { es: "Rescatados", en: "Rescued" },
-    title: { es: "Reporta rescatados con vida", en: "Report people rescued alive" },
+    eyebrow: { es: "Rescatados", en: "Rescued", pt: "Resgatados" },
+    title: { es: "Reporta rescatados con vida", en: "Report people rescued alive", pt: "Reporte resgatados com vida" },
     body: {
       es: "En «Rescatados» publicas a alguien sacado con vida aunque aún no sepas a qué centro fue. Cuando lo trasladen, promuévelo a paciente y aparecerá en el mapa.",
       en: "In “Rescued” you publish someone pulled out alive even before you know which center they went to. When transferred, promote them to a patient and they appear on the map.",
+      pt: "Em «Resgatados» você publica alguém retirado com vida mesmo sem saber ainda para qual centro foi. Quando for transferido, promova-o a paciente e ele aparecerá no mapa.",
     },
     icon: I.heart,
   },
   {
-    eyebrow: { es: "Subir listas", en: "Upload lists" },
-    title: { es: "Fotografía listas manuscritas", en: "Photograph handwritten lists" },
+    eyebrow: { es: "Subir listas", en: "Upload lists", pt: "Enviar listas" },
+    title: { es: "Fotografía listas manuscritas", en: "Photograph handwritten lists", pt: "Fotografe listas manuscritas" },
     body: {
       es: "¿Tienes una lista de pacientes en papel? Foto en «Listas» → el equipo la procesa (OCR) y entra al flujo. Borrar registros y centros queda solo para administradores.",
       en: "Got a paper patient list? Photo it in “Lists” → the team processes it (OCR) into the flow. Deleting records and centers is admin-only.",
+      pt: "Tem uma lista de pacientes em papel? Fotografe em «Listas» → a equipe a processa (OCR) e ela entra no fluxo. Excluir registros e centros é exclusivo para administradores.",
     },
     icon: I.upload,
   },
@@ -311,7 +356,7 @@ export default function Tour({
   const slides = variant === "staff" ? STAFF_SLIDES : SLIDES;
   const s = slides[i];
   const last = i === slides.length - 1;
-  const L = (o: { es: string; en: string }) => o[lang];
+  const L = (o: { es: string; en: string; pt: string }) => o[lang];
 
   const next = () => (last ? onClose() : setI((n) => n + 1));
   const back = () => setI((n) => Math.max(0, n - 1));
@@ -343,7 +388,7 @@ export default function Tour({
         {s.cta === "volunteer" && onVolunteer && (
           <button className="tour-cta" onClick={onVolunteer}>
             {I.hands}
-            {lang === "es" ? "Quiero ayudar" : "I want to help"}
+            {L({ es: "Quiero ayudar", en: "I want to help", pt: "Quero ajudar" })}
           </button>
         )}
 
@@ -356,15 +401,15 @@ export default function Tour({
         <div className="tour-actions">
           {i > 0 ? (
             <button className="tour-back" onClick={back}>
-              {lang === "es" ? "Atrás" : "Back"}
+              {L({ es: "Atrás", en: "Back", pt: "Voltar" })}
             </button>
           ) : (
             <button className="tour-skip" onClick={onClose}>
-              {lang === "es" ? "Saltar" : "Skip"}
+              {L({ es: "Saltar", en: "Skip", pt: "Pular" })}
             </button>
           )}
           <button className="tour-next" onClick={next}>
-            {last ? (lang === "es" ? "Entendido" : "Got it") : lang === "es" ? "Siguiente" : "Next"}
+            {last ? L({ es: "Entendido", en: "Got it", pt: "Entendi" }) : L({ es: "Siguiente", en: "Next", pt: "Próximo" })}
           </button>
         </div>
 
@@ -374,7 +419,7 @@ export default function Tour({
               <rect x="4" y="11" width="16" height="9" rx="2" />
               <path d="M8 11V7a4 4 0 0 1 8 0v4" />
             </svg>
-            {lang === "es" ? "Ingresar (equipo)" : "Sign in (team)"}
+            {L({ es: "Ingresar (equipo)", en: "Sign in (team)", pt: "Entrar (equipe)" })}
           </button>
         )}
       </div>
