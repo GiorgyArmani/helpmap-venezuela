@@ -2,13 +2,18 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
   ACOPIOVE_ATTRIBUTION,
-  fetchAcopioRefugios,
+  derivePlace,
+  fetchAcopioCentros,
   mapCentro,
+  type AcopioCentro,
+  type AcopioTipo,
   type MappedLocation,
   type MappedRefugio,
 } from "@/lib/acopiove";
 
-// Pull importer: AcopioVE /centros?tipo=refugio → upsert `locations` + `refugios` by
+// Pull importer: AcopioVE /centros?tipo=refugio  → upsert `locations`(type=shelter)
+//                AcopioVE /centros?tipo=acopio&pais=Venezuela → `locations`(type=donation_centre)
+// Both write their needs into the shared `refugios` companion table, keyed + de-duped by
 // external_id (the AcopioVE UUID). FRESHEST-WINS by `updated_at`: a row is only
 // overwritten when AcopioVE's data is newer than the copy we hold — so a HelpMap staff
 // edit (which stamps a newer updated_at, see saveCenter) is never clobbered by a sync.
@@ -28,7 +33,23 @@ function authorized(req: Request): boolean {
 
 async function runSync() {
   const admin = createAdminClient();
-  const items = await fetchAcopioRefugios();
+
+  // Refugios (established, all countries) + acopios (Venezuela only, newer endpoint). The
+  // acopio pull is isolated in a try/catch so a hiccup on the newer endpoint can never
+  // break the proven refugio sync; each item carries its `tipo` so mapCentro produces the
+  // right location type (shelter vs donation_centre) + id prefix.
+  const refugios = await fetchAcopioCentros({ tipo: "refugio" });
+  let acopios: AcopioCentro[] = [];
+  let acopioError: string | null = null;
+  try {
+    acopios = await fetchAcopioCentros({ tipo: "acopio", pais: "Venezuela" });
+  } catch (e) {
+    acopioError = e instanceof Error ? e.message : "unknown";
+  }
+  const items: Array<{ it: AcopioCentro; tipo: AcopioTipo }> = [
+    ...refugios.map((it) => ({ it, tipo: "refugio" as const })),
+    ...acopios.map((it) => ({ it, tipo: "acopio" as const })),
+  ];
 
   // Existing refugios keyed by external_id, plus every used location_id (to mint unique
   // ids for genuinely-new refugios without colliding).
@@ -51,11 +72,21 @@ async function runSync() {
   const notify: Array<{ center: MappedLocation; action: "created" | "updated" }> = [];
   let inserted = 0,
     updated = 0,
-    skipped = 0;
+    skipped = 0,
+    outOfScope = 0; // acopios we couldn't place in a supported corridor state (§13)
 
-  for (const it of items) {
+  for (const { it, tipo } of items) {
     if (!it.id || typeof it.lat !== "number" || typeof it.lng !== "number") {
       skipped++;
+      continue;
+    }
+    // `locations.state` is the `vzla_state` enum. Since the nationwide expansion it holds
+    // all 24 states (db/states.sql), and derivePlace resolves ~all AcopioVE acopios to
+    // one — but a handful with only an ambiguous bare town name (Libertad, Independencia…)
+    // can't be placed. Skip those rather than feed the enum a bad value (which would 22P02
+    // the whole batch); the count is reported so an admin can add them by hand.
+    if (tipo === "acopio" && !derivePlace(it).confident) {
+      outOfScope++;
       continue;
     }
     const ex = byExt.get(it.id);
@@ -66,18 +97,18 @@ async function runSync() {
         skipped++; // freshest-wins: our copy is same or newer (likely a local staff edit)
         continue;
       }
-      const m = mapCentro(it, ex.location_id);
+      const m = mapCentro(it, ex.location_id, tipo);
       locUpserts.push(m.location);
       refUpserts.push(m.refugio);
       notify.push({ center: m.location, action: "updated" });
       updated++;
     } else {
-      const base = mapCentro(it).location.location_id;
+      const base = mapCentro(it, undefined, tipo).location.location_id;
       let id = base,
         n = 2;
       while (usedIds.has(id)) id = `${base}_${n++}`;
       usedIds.add(id);
-      const m = mapCentro(it, id);
+      const m = mapCentro(it, id, tipo);
       locUpserts.push(m.location);
       refUpserts.push(m.refugio);
       notify.push({ center: m.location, action: "created" });
@@ -97,7 +128,17 @@ async function runSync() {
 
   const notified = await notifyCenters(notify);
 
-  return { fetched: items.length, inserted, updated, skipped, notified };
+  return {
+    fetched: items.length,
+    refugios: refugios.length,
+    acopios: acopios.length,
+    acopioOutOfScope: outOfScope, // acopios dropped for being outside the 7 supported states
+    acopioError, // non-null if the acopio pull failed but refugios still synced
+    inserted,
+    updated,
+    skipped,
+    notified,
+  };
 }
 
 // Mirror the changed centers to the n8n centers webhook (LISTS dropdown + dedup alias/loc

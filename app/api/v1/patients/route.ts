@@ -1,3 +1,4 @@
+import { createHmac } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
@@ -15,6 +16,9 @@ import { clientIp, rateLimit, rateLimitHeaders } from "@/lib/rateLimit";
 //   • Minors are re-protected server-side (protectMinor) on top of the view (defense in depth).
 //   • FALLECIDO rows are included (already public in-app when verified) but flagged here so the
 //     team can revisit — a casualty-count export is sensitive (§13). Set EXCLUDE_DECEASED to drop.
+//   • The raw cédula is NEVER emitted in bulk. `ci_display` is dropped and replaced by an opaque
+//     `person_hash` (HMAC — see personHash below) so partner apps can dedup/match the same person
+//     across systems WITHOUT anyone reconstructing the identity. Set IDENTITY_PEPPER to enable it.
 //
 // Versioned (/api/v1) so the contract is stable for consumers. CORS-open GET. CDN-cacheable.
 // Open (no API key) but per-IP rate-limited (lib/rateLimit) so a scraper can't melt the server;
@@ -26,6 +30,25 @@ export const dynamic = "force-dynamic"; // query params drive the response; don'
 // --- Team-tunable privacy switches (see header) ---
 const INCLUDE_PHOTOS = false;
 const EXCLUDE_DECEASED = false;
+
+// Shared secret ("pepper") for the cross-app identity hash. Coordinated OUT-OF-BAND with
+// trusted partner apps (e.g. AcopioVE) and set only server-side — never in the client
+// bundle, never in a payload. A Venezuelan cédula is low-entropy (≤~31M values), so a bare
+// hash is brute-forceable in milliseconds; HMAC with a secret pepper makes the digest
+// irreversible to anyone without it, while two apps holding the SAME pepper derive an
+// identical hash for the same person → they can match/dedup without exchanging raw cédulas.
+const IDENTITY_PEPPER = process.env.IDENTITY_PEPPER || "";
+
+// Opaque, stable, cross-app person key. Normalization contract (must match partners):
+// bare ASCII digits of the cédula → HMAC-SHA256(pepper) → first 16 hex chars (64 bits,
+// collision-safe at this scale). Returns null for minors, undocumented people, or when the
+// pepper is unset — so we NEVER emit a weak/unsalted digest or leak a raw digit.
+function personHash(ciDisplay: string | null, isMinor: boolean): string | null {
+  if (!IDENTITY_PEPPER || isMinor) return null;
+  const digits = (ciDisplay || "").replace(/\D/g, "");
+  if (digits.length < 5) return null; // "MENOR" / "sin documento" / "—" / junk → no identity
+  return createHmac("sha256", IDENTITY_PEPPER).update(digits).digest("hex").slice(0, 16);
+}
 
 const MAX_LIMIT = 500;
 const DEFAULT_LIMIT = 100;
@@ -118,11 +141,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "query_failed" }, { status: 502, headers: CORS });
     }
 
-    // Defense in depth: re-protect minors, then drop the photo unless explicitly enabled.
+    // Defense in depth: re-protect minors, replace the raw cédula with an opaque cross-app
+    // person_hash (never emit ci_display in bulk), then drop the photo unless enabled.
     const rows = ((data ?? []) as unknown as PatientPublic[]).map((r) => {
       const safe = protectMinor(r);
-      const { foto_url, ...rest } = safe;
-      return INCLUDE_PHOTOS ? { ...rest, foto_url } : rest;
+      const { foto_url, ci_display, ...rest } = safe;
+      const out = { ...rest, person_hash: personHash(ci_display, safe.is_minor) };
+      return INCLUDE_PHOTOS ? { ...out, foto_url } : out;
     });
 
     const total = count ?? rows.length;

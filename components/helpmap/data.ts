@@ -9,7 +9,25 @@ export type VzlaState =
   | "yaracuy"
   | "falcon"
   | "carabobo"
-  | "aragua";
+  | "aragua"
+  // Nationwide (added for the AcopioVE puntos de acopio, which span all of Venezuela).
+  | "amazonas"
+  | "anzoategui"
+  | "apure"
+  | "barinas"
+  | "bolivar"
+  | "cojedes"
+  | "delta_amacuro"
+  | "guarico"
+  | "lara"
+  | "merida"
+  | "monagas"
+  | "nueva_esparta"
+  | "portuguesa"
+  | "sucre"
+  | "tachira"
+  | "trujillo"
+  | "zulia";
 export type LocationType = "hospital" | "shelter" | "morgue" | "donation_centre" | "comedor";
 export type Estatus = "INGRESADO" | "ALTA" | "FALLECIDO";
 export type Sexo = "M" | "F";
@@ -146,6 +164,23 @@ export const STATE_LABEL: Record<VzlaState, string> = {
   falcon: "Falcón",
   carabobo: "Carabobo",
   aragua: "Aragua",
+  amazonas: "Amazonas",
+  anzoategui: "Anzoátegui",
+  apure: "Apure",
+  barinas: "Barinas",
+  bolivar: "Bolívar",
+  cojedes: "Cojedes",
+  delta_amacuro: "Delta Amacuro",
+  guarico: "Guárico",
+  lara: "Lara",
+  merida: "Mérida",
+  monagas: "Monagas",
+  nueva_esparta: "Nueva Esparta",
+  portuguesa: "Portuguesa",
+  sucre: "Sucre",
+  tachira: "Táchira",
+  trujillo: "Trujillo",
+  zulia: "Zulia",
 };
 
 export interface TypeMeta {
@@ -285,7 +320,7 @@ export interface Strings {
   reportMarkReviewed: string; reportCloseAction: string; reportReporter: string;
   reportZonaLabel: string; reportUpdated: string;
   updatedTitle: string; cardDisclaimer: string;
-  refShelterInfo: string; refReceives: string; refNeeds: string; refSchedule: string;
+  refShelterInfo: string; refAcopioInfo: string; refReceives: string; refNeeds: string; refSchedule: string;
   refManager: string; refConfirmed: string; refSource: string; refAnimal: string;
   refNoNeeds: string;
   refEditTitle: string; f_refRecibe: string; f_refRecibeHint: string; f_refNecesita: string;
@@ -592,6 +627,7 @@ export const T: Record<Lang, Strings> = {
     cardDisclaimer:
       "Los datos reflejan el último registro disponible y su fecha. En una emergencia hay múltiples traslados: esta lista no garantiza que la persona siga en ese centro, pero sí la veracidad y la fecha del dato publicado. La información se actualiza a medida que llegan nuevos aportes. Úsala como herramienta de búsqueda, consulta y colaboración ciudadana.",
     refShelterInfo: "Refugio · información y necesidades",
+    refAcopioInfo: "Centro de acopio · información y necesidades",
     refReceives: "Recibe donaciones de",
     refNeeds: "Necesita ahora",
     refSchedule: "Horario",
@@ -609,8 +645,8 @@ export const T: Record<Lang, Strings> = {
     f_refResponsable: "Responsable / contacto",
     f_refAddress: "Dirección / referencia",
     f_refAnimal: "¿Es refugio de animales?",
-    refNeedBar: "{n} refugios necesitan ayuda",
-    refListTitle: "Refugios · cómo colaborar",
+    refNeedBar: "{n} centros necesitan ayuda",
+    refListTitle: "Refugios y acopios · cómo colaborar",
     refListSub: "Necesidades reportadas por refugios y puntos de acopio. Colabora como puedas, donde puedas: acércales lo que necesitan, o comparte para que llegue a más gente.",
     refListEmpty: "Aún no hay necesidades reportadas. Vuelve pronto.",
     refShareCta: "Compartir necesidad",
@@ -914,6 +950,7 @@ export const T: Record<Lang, Strings> = {
     cardDisclaimer:
       "The data reflects the latest available record and its date. In an emergency there are multiple transfers: this list does not guarantee the person is still at that center, but it does guarantee the veracity and date of the published data. Information is updated as new contributions arrive. Use it as a tool for searching, consultation and citizen collaboration.",
     refShelterInfo: "Shelter · info & needs",
+    refAcopioInfo: "Donation point · info & needs",
     refReceives: "Accepts donations of",
     refNeeds: "Needs right now",
     refSchedule: "Hours",
@@ -931,8 +968,8 @@ export const T: Record<Lang, Strings> = {
     f_refResponsable: "Contact person",
     f_refAddress: "Address / reference",
     f_refAnimal: "Is it an animal shelter?",
-    refNeedBar: "{n} shelters need help",
-    refListTitle: "Shelters · how to help",
+    refNeedBar: "{n} centers need help",
+    refListTitle: "Shelters & donation points · how to help",
     refListSub: "Needs reported by shelters and donation points. Help however you can, wherever you can: bring them what they need, or share so it reaches more people.",
     refListEmpty: "No needs reported yet. Check back soon.",
     refShareCta: "Share this need",
@@ -1236,6 +1273,7 @@ export const T: Record<Lang, Strings> = {
     cardDisclaimer:
       "Os dados refletem o último registro disponível e sua data. Em uma emergência há múltiplas transferências: esta lista não garante que a pessoa continue naquele centro, mas garante a veracidade e a data do dado publicado. A informação é atualizada à medida que chegam novas contribuições. Use-a como ferramenta de busca, consulta e colaboração cidadã.",
     refShelterInfo: "Abrigo · informações e necessidades",
+    refAcopioInfo: "Ponto de arrecadação · informações e necessidades",
     refReceives: "Recebe doações de",
     refNeeds: "Necessita agora",
     refSchedule: "Horário",
@@ -1253,8 +1291,8 @@ export const T: Record<Lang, Strings> = {
     f_refResponsable: "Responsável / contato",
     f_refAddress: "Endereço / referência",
     f_refAnimal: "É abrigo de animais?",
-    refNeedBar: "{n} abrigos precisam de ajuda",
-    refListTitle: "Abrigos · como colaborar",
+    refNeedBar: "{n} centros precisam de ajuda",
+    refListTitle: "Abrigos e arrecadação · como colaborar",
     refListSub: "Necessidades reportadas por abrigos e pontos de arrecadação. Colabore como puder, onde puder: leve o que precisam, ou compartilhe para alcançar mais gente.",
     refListEmpty: "Ainda não há necessidades reportadas. Volte em breve.",
     refShareCta: "Compartilhar necessidade",

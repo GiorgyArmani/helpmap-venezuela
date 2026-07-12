@@ -1434,6 +1434,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        tipo: loc.type === "donation_centre" ? "acopio" : "refugio",
         external_id: r.external_id,
         name: loc.canonical_name,
         address: r.address,
@@ -1487,10 +1488,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       return;
     }
     setLocations((ls) => (editId ? ls.map((l) => (l.location_id === obj.location_id ? obj : l)) : [...ls, obj]));
-    // Shelter needs (recibe/necesita/…) live in the companion `refugios` table. Upsert
-    // it whenever the center is a shelter so staff can keep each refugio's differing
-    // needs current (CLAUDE.md §14, AcopioVE). Non-fatal: the center already saved.
-    if (obj.type === "shelter") {
+    // Shelter/acopio needs (recibe/necesita/…) live in the companion `refugios` table.
+    // Upsert it whenever the center is a refugio (shelter) OR a punto de acopio
+    // (donation_centre) — both carry AcopioVE needs (CLAUDE.md §14). Non-fatal: the
+    // center already saved.
+    if (obj.type === "shelter" || obj.type === "donation_centre") {
       const existing = refugioById[obj.location_id];
       const recibe = (d.ref_recibe || "")
         .split(",")
@@ -2575,7 +2577,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           {selRefugio && selStateLoc && (
             <div className="refcard">
               <div className="refhead">
-                <span className="refkick">{ICON.pin}{t.refShelterInfo}</span>
+                <span className="refkick">{ICON.pin}{selStateLoc.type === "donation_centre" ? t.refAcopioInfo : t.refShelterInfo}</span>
                 {selRefugio.es_animal && <span className="refanimal">{t.refAnimal}</span>}
               </div>
               {selRefugio.necesita && (
@@ -3607,9 +3609,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                       {t.geoPickMap}
                     </button>
                     <span className="fhint">{t.geoPickHint}</span>
-                    {/* Refugio needs: only for shelters. Editable by staff so each
-                        refugio's differing needs stay current (AcopioVE, §14). */}
-                    {draft?.type === "shelter" && (
+                    {/* Refugio/acopio needs: for shelters AND puntos de acopio. Editable
+                        by staff so each center's differing needs stay current (AcopioVE, §14). */}
+                    {(draft?.type === "shelter" || draft?.type === "donation_centre") && (
                       <div className="refedit">
                         <span className="refedit-h">{t.refEditTitle}</span>
                         <div className="fld">

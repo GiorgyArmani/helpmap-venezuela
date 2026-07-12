@@ -31,6 +31,7 @@ export async function POST(request: Request) {
   if (!gate.ok) return NextResponse.json({ error: "forbidden" }, { status: gate.status });
 
   let body: {
+    tipo?: "refugio" | "acopio";
     external_id?: string | null;
     name?: string;
     estado?: string | null;
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
   const payload = {
     id: body.external_id || undefined,
     name: body.name,
-    tipo: "refugio",
+    tipo: body.tipo === "acopio" ? "acopio" : "refugio",
     estado: body.estado || "abierto",
     address: body.address ?? null,
     ciudad: body.ciudad ?? null,
