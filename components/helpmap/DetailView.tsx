@@ -3,7 +3,16 @@ import { Avatar } from "./Avatar";
 import { ICON, TYPE_ICON } from "./icons";
 import { timeAgo, localeOf } from "./helpers";
 import { mapsDirectionsUrl } from "./share";
-import { SM, STATE_LABEL, TYPE_META, type Lang, type Location, type PatientPublic, type Strings } from "./data";
+import { maskCI, SM, STATE_LABEL, TYPE_META, type Lang, type Location, type PatientPublic, type Strings } from "./data";
+
+// Formats fecha_lista as a date (no time). A bare "YYYY-MM-DD" is parsed as local
+// (not UTC) to avoid an off-by-one-day shift; a full timestamp is shown as its date.
+function formatListDate(value: string, lang: Lang): string {
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const d = new Date(dateOnly ? value + "T00:00:00" : value);
+  if (isNaN(d.getTime())) return value;
+  return d.toLocaleDateString(localeOf(lang), { year: "numeric", month: "long", day: "numeric" });
+}
 
 // Per-person detail overlay (the "ficha"). Presentational; actions come in as callbacks.
 export function DetailView({
@@ -65,7 +74,7 @@ export function DetailView({
         <div className="drows">
           {[
             { label: t.f_status, value: SM[patient.estatus][lang], mono: "" },
-            { label: t.ci, value: patient.ci_display, mono: "mono" },
+            { label: t.ci, value: maskCI(patient.ci_display), mono: "mono" },
             { label: t.edad, value: patient.edad != null ? patient.edad + " " + t.yrs : "—", mono: "" },
             { label: t.sexo, value: patient.sexo === "F" ? t.female : patient.sexo === "M" ? t.male : "—", mono: "" },
             { label: t.ubic, value: patient.location_name, mono: "" },
@@ -83,6 +92,11 @@ export function DetailView({
             },
             { label: t.municipality, value: patient.municipality ?? "—", mono: "" },
             { label: t.state, value: STATE_LABEL[patient.state], mono: "" },
+            // Date the source list this record came from corresponds to (backend-set),
+            // distinct from the "last updated" hero above. Only shown when present.
+            ...(patient.fecha_lista
+              ? [{ label: t.fechaLista, value: formatListDate(patient.fecha_lista, lang), mono: "" }]
+              : []),
             {
               label: (
                 <span className="dlabel-info">

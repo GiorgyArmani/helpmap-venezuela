@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SM, STATE_LABEL, TYPE_META } from "@/components/helpmap/data";
+import { maskCI, SM, STATE_LABEL, TYPE_META } from "@/components/helpmap/data";
 import { fetchPatient } from "./fetchPatient";
 import PatientActions from "./PatientActions";
 
@@ -66,7 +66,7 @@ export default async function PatientPage({ params }: Params) {
   const initials = ((p.nombres[0] || "") + (p.apellidos[0] || "")).toUpperCase() || "··";
   const rows: [string, string][] = [
     ["Estatus", status.es],
-    ["Cédula", p.ci_display],
+    ["Cédula", maskCI(p.ci_display)],
     ["Edad", p.edad != null ? `${p.edad} años` : "—"],
     ["Sexo", p.sexo === "F" ? "Femenino" : p.sexo === "M" ? "Masculino" : "—"],
     ["Centro", p.location_name],

@@ -1,6 +1,6 @@
 import { Avatar } from "./Avatar";
 import { ICON } from "./icons";
-import type { RescatadoPublic, Strings } from "./data";
+import { maskCI, type RescatadoPublic, type Strings } from "./data";
 
 // Public "Rescatados" list — people rescued in the field, not yet at a center (no map
 // pin). Presentational: all data comes in as props.
@@ -39,7 +39,7 @@ export function RescuedView({
                 {[
                   r.edad != null ? r.edad + " " + t.yrs : null,
                   r.sexo === "M" ? t.male : r.sexo === "F" ? t.female : null,
-                  !r.is_minor && r.ci_display && r.ci_display !== "—" ? r.ci_display : null,
+                  !r.is_minor && r.ci_display && r.ci_display !== "—" ? maskCI(r.ci_display) : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")}

@@ -100,6 +100,11 @@ export interface PatientPublic {
   foto_url: string | null;
   verified: boolean;
   updated_at: string;
+  // Date the source list this record came from corresponds to (set at the backend,
+  // distinct from updated_at = when the row was last written). Shown on the ficha so
+  // families know the date of the list the person appears on. Nullable (older rows /
+  // records not sourced from a dated list). Exposed by the patients_public view.
+  fecha_lista?: string | null;
 }
 
 // `rescatados_public` view — a rescued person not yet transferred to a center, so no
@@ -319,7 +324,7 @@ export interface Strings {
   tabReports: string; reportsNone: string; newsPendingReports: string;
   reportMarkReviewed: string; reportCloseAction: string; reportReporter: string;
   reportZonaLabel: string; reportUpdated: string;
-  updatedTitle: string; cardDisclaimer: string;
+  updatedTitle: string; cardDisclaimer: string; fechaLista: string;
   refShelterInfo: string; refAcopioInfo: string; refReceives: string; refNeeds: string; refSchedule: string;
   refManager: string; refConfirmed: string; refSource: string; refAnimal: string;
   refNoNeeds: string;
@@ -624,6 +629,7 @@ export const T: Record<Lang, Strings> = {
     reportZonaLabel: "Última zona",
     reportUpdated: "Reporte actualizado.",
     updatedTitle: "Última actualización",
+    fechaLista: "Fecha de la lista",
     cardDisclaimer:
       "Los datos reflejan el último registro disponible y su fecha. En una emergencia hay múltiples traslados: esta lista no garantiza que la persona siga en ese centro, pero sí la veracidad y la fecha del dato publicado. La información se actualiza a medida que llegan nuevos aportes. Úsala como herramienta de búsqueda, consulta y colaboración ciudadana.",
     refShelterInfo: "Refugio · información y necesidades",
@@ -947,6 +953,7 @@ export const T: Record<Lang, Strings> = {
     reportZonaLabel: "Last area",
     reportUpdated: "Report updated.",
     updatedTitle: "Last updated",
+    fechaLista: "List date",
     cardDisclaimer:
       "The data reflects the latest available record and its date. In an emergency there are multiple transfers: this list does not guarantee the person is still at that center, but it does guarantee the veracity and date of the published data. Information is updated as new contributions arrive. Use it as a tool for searching, consultation and citizen collaboration.",
     refShelterInfo: "Shelter · info & needs",
@@ -1270,6 +1277,7 @@ export const T: Record<Lang, Strings> = {
     reportZonaLabel: "Última área",
     reportUpdated: "Reporte atualizado.",
     updatedTitle: "Última atualização",
+    fechaLista: "Data da lista",
     cardDisclaimer:
       "Os dados refletem o último registro disponível e sua data. Em uma emergência há múltiplas transferências: esta lista não garante que a pessoa continue naquele centro, mas garante a veracidade e a data do dado publicado. A informação é atualizada à medida que chegam novas contribuições. Use-a como ferramenta de busca, consulta e colaboração cidadã.",
     refShelterInfo: "Abrigo · informações e necessidades",
@@ -1320,6 +1328,23 @@ export function protectMinorRescatado(r: RescatadoPublic): RescatadoPublic {
   if (!minor) return r;
   if (r.foto_url === null && r.ci_display === "MENOR" && r.is_minor) return r; // already clean
   return { ...r, is_minor: true, ci_display: "MENOR", foto_url: null };
+}
+
+// Visually censor a cédula for PUBLIC display (cards, ficha, shared pages). The raw CI
+// stays in `ci_display` for search (families search by cédula — CLAUDE.md §1), but the
+// full number must not sit exposed on screen. Keeps a nationality prefix (V-/E-…) and the
+// last 3 digits for recognition; masks the rest. Passes through "MENOR" / "—" / empty.
+// NOTE: display-only — never mutate ci_display with this (would break CI search). Staff/
+// admin surfaces keep the full CI.
+export function maskCI(ci: string | null | undefined): string {
+  const v = (ci ?? "").trim();
+  if (!v || v === "MENOR" || v === "—") return v || "—";
+  const m = v.match(/^([VvEeJjGgPp])[-\s.]?/);
+  const prefix = m ? m[1].toUpperCase() + "-" : "";
+  const digits = v.replace(/\D/g, "");
+  if (digits.length <= 3) return prefix + "•".repeat(Math.max(digits.length, 3));
+  const hidden = "•".repeat(Math.min(digits.length - 3, 8));
+  return prefix + hidden + digits.slice(-3);
 }
 
 const DIACRITICS = new RegExp("[\\u0300-\\u036f]", "g");
