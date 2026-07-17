@@ -16,7 +16,8 @@ export type View =
   | "contact"
   | "contribute"
   | "rescued"
-  | "refugios";
+  | "refugios"
+  | "refShare";
 
 export type AdminTab =
   | "novedades"

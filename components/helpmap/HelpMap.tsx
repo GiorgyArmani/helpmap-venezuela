@@ -27,11 +27,13 @@ import { createClient } from "@/utils/supabase/client";
 import { flushQueue, queueCount } from "./intakeQueue";
 import { compressImage, LIST_OPTS } from "./uploadPhoto";
 import {
+  centerUrl,
   copyText,
   nativeShare,
   mapsDirectionsUrl,
   openShare,
   patientUrl,
+  shareCenterStoryImage,
   shareStoryImage,
   shareText,
   telegramUrl,
@@ -48,6 +50,7 @@ import { StatePicker } from "./StatePicker";
 import { Avatar } from "./Avatar";
 import { RescuedView } from "./RescuedView";
 import { RefugiosView } from "./RefugiosView";
+import { RefugioShareView } from "./RefugioShareView";
 import { ShareView } from "./ShareView";
 import { DonateView } from "./DonateView";
 import { DetailView } from "./DetailView";
@@ -140,6 +143,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [focusId, setFocusId] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // The help point (refugio / centro de acopio) currently open in the share overlay,
+  // plus the view to return to on back (the map bottom-sheet or the refugios list).
+  const [refShareSel, setRefShareSel] = useState<{ loc: Location; ref: Refugio } | null>(null);
+  const [refShareBack, setRefShareBack] = useState<View>(null);
   const [toast, setToast] = useState("");
   const [adminTab, setAdminTab] = useState<AdminTab>("centros");
   const [admQ, setAdmQ] = useState(""); // in-panel search filter for the list tabs
@@ -1159,25 +1166,45 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     }
   };
 
-  // Share a shelter's NEED into WhatsApp/native share — the core "promptear a colaborar"
-  // action so a specific need reaches people who can act on it (CLAUDE.md §5, focus:
-  // visibilizar necesidades). Links to the map location so anyone can go help.
-  const shareRefugio = async (loc: Location, r: Refugio) => {
+  // Open the share overlay for a help point's NEED — the same rich system as patients
+  // (preview card + WhatsApp/Telegram/Instagram-story/copy), so a need can be shared
+  // "a sociales bien" instead of only a raw WhatsApp text (CLAUDE.md §5, focus:
+  // visibilizar necesidades). The IG target generates a 1080×1920 image of the need.
+  const shareRefugio = (loc: Location, r: Refugio) => {
+    setRefShareSel({ loc, ref: r });
+    setRefShareBack(view);
+    setView("refShare");
+  };
+
+  // Build the shareable text for a help point's need. Links to /c/<id> (an SSR page
+  // that renders a HelpMap OG preview card), not a bare Maps URL.
+  const refShareMessage = (loc: Location, r: Refugio) => {
     const needs = r.necesita?.trim() || (r.recibe.length ? r.recibe.join(", ") : "");
     const where = [loc.municipality, STATE_LABEL[loc.state]].filter(Boolean).join(", ");
-    const url = mapsDirectionsUrl(loc.lat, loc.lng);
-    const text =
+    return (
       `🆘 ${loc.canonical_name}${where ? " · " + where : ""} necesita ayuda` +
       (needs ? `:\n${needs}` : "") +
-      `\n${t.refShareTag}`;
-    const touch =
-      typeof window !== "undefined" &&
-      (window.matchMedia?.("(pointer: coarse)").matches || (navigator.maxTouchPoints ?? 0) > 0);
-    if (touch) {
-      const ok = await nativeShare({ title: loc.canonical_name, text, url });
-      if (ok) return;
+      `\n${t.refShareTag}`
+    );
+  };
+
+  const shareRefugioTo = async (target: "wa" | "tg" | "ig" | "copy") => {
+    if (!refShareSel) return;
+    const { loc, ref } = refShareSel;
+    const url = centerUrl(loc.location_id);
+    const text = refShareMessage(loc, ref);
+    if (target === "wa") openShare(whatsappUrl(url, text));
+    else if (target === "tg") openShare(telegramUrl(url, text));
+    else if (target === "ig") {
+      showToast(t.storyBuilding);
+      const r = await shareCenterStoryImage(loc.location_id, loc.canonical_name);
+      if (r === "shared") showToast(t.storyShared);
+      else if (r === "downloaded") showToast(t.storyDownloaded);
+      else showToast(t.storyError);
+    } else {
+      const ok = await copyText(url);
+      if (ok) showToast(t.copied);
     }
-    openShare(whatsappUrl(url, text));
   };
 
   const centroidForState = (st: VzlaState): [number, number] | null => {
@@ -2624,7 +2651,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </a>
                 {selStateLoc.contact_whatsapp && (
                   <a
-                    className="btng"
+                    className="btng btnwa"
                     href={`https://wa.me/${selStateLoc.contact_whatsapp.replace(/[^0-9]/g, "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -2634,7 +2661,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   </a>
                 )}
                 {selStateLoc.contact_phone && (
-                  <a className="btng" href={`tel:${selStateLoc.contact_phone}`}>
+                  <a className="btng btncall" href={`tel:${selStateLoc.contact_phone}`}>
                     {ICON.phone}
                     {t.call}
                   </a>
@@ -2749,7 +2776,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </a>
                 {selStateLoc.contact_whatsapp && (
                   <a
-                    className="btng"
+                    className="btng btnwa"
                     href={`https://wa.me/${selStateLoc.contact_whatsapp.replace(/[^0-9]/g, "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -2759,7 +2786,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   </a>
                 )}
                 {selStateLoc.contact_phone && (
-                  <a className="btng" href={`tel:${selStateLoc.contact_phone}`}>
+                  <a className="btng btncall" href={`tel:${selStateLoc.contact_phone}`}>
                     {ICON.phone}
                     {t.call}
                   </a>
@@ -2792,6 +2819,17 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       {/* ---- Share overlay ---- */}
       {view === "share" && selP && (
         <ShareView t={t} lang={lang} patient={selP} onShareTo={shareTo} onBack={() => setView("detail")} />
+      )}
+
+      {view === "refShare" && refShareSel && (
+        <RefugioShareView
+          t={t}
+          lang={lang}
+          loc={refShareSel.loc}
+          refugio={refShareSel.ref}
+          onShareTo={shareRefugioTo}
+          onBack={() => setView(refShareBack)}
+        />
       )}
 
       {/* ---- Donate overlay (external partners; opens in a new tab) ---- */}

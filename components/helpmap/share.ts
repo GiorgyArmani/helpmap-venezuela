@@ -10,6 +10,18 @@ export function patientUrl(id: string) {
   return window.location.origin + patientPath(id);
 }
 
+// Per-center (refugio / centro de acopio) shareable page — same SSR + OG-card + story
+// system as patients, so a help point's need renders a preview card in WhatsApp/Telegram
+// and can be posted as an Instagram story (CLAUDE.md §5).
+export function centerPath(id: string) {
+  return `/c/${id}`;
+}
+
+export function centerUrl(id: string) {
+  if (typeof window === "undefined") return centerPath(id);
+  return window.location.origin + centerPath(id);
+}
+
 export function shareText(name: string, statusLabel: string, locationName: string) {
   return `${name} · ${statusLabel} · ${locationName} · HelpMap Venezuela`;
 }
@@ -62,9 +74,9 @@ export async function copyText(text: string): Promise<boolean> {
 // intent). Falls back to downloading the image when file-share is unsupported.
 export type StoryShareResult = "shared" | "downloaded" | "error";
 
-export async function shareStoryImage(id: string, title: string): Promise<StoryShareResult> {
-  const storyUrl = patientPath(id) + "/story";
-
+// Generic: fetch a server-generated PNG at `storyUrl` and hand it to the native
+// share sheet as a FILE (mobile → Instagram Story), else open it for manual saving.
+async function shareImageFile(storyUrl: string, fileName: string, title: string): Promise<StoryShareResult> {
   // Native share sheet ONLY on phones/tablets — there it lets the user pick
   // Instagram → Story. On desktop the OS "Share" dialog is unwanted (the user
   // just wants the image to save and post manually), so we skip it.
@@ -77,7 +89,7 @@ export async function shareStoryImage(id: string, title: string): Promise<StoryS
       const res = await fetch(storyUrl);
       if (res.ok && typeof navigator !== "undefined" && typeof navigator.canShare === "function") {
         const blob = await res.blob();
-        const file = new File([blob], `helpmap-${id}.png`, { type: "image/png" });
+        const file = new File([blob], fileName, { type: "image/png" });
         if (navigator.canShare({ files: [file] }) && typeof navigator.share === "function") {
           try {
             await navigator.share({ files: [file], title });
@@ -100,6 +112,15 @@ export async function shareStoryImage(id: string, title: string): Promise<StoryS
     return "downloaded";
   }
   return "error";
+}
+
+export async function shareStoryImage(id: string, title: string): Promise<StoryShareResult> {
+  return shareImageFile(patientPath(id) + "/story", `helpmap-${id}.png`, title);
+}
+
+// Same story-image flow for a help point (refugio / centro de acopio).
+export async function shareCenterStoryImage(id: string, title: string): Promise<StoryShareResult> {
+  return shareImageFile(centerPath(id) + "/story", `helpmap-centro-${id}.png`, title);
 }
 
 // Native OS share sheet (mobile) — shows WhatsApp/Instagram/Telegram directly.
