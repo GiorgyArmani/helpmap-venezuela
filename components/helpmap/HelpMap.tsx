@@ -2233,6 +2233,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const rootStyle = accent ? ({ ["--accent"]: accent } as React.CSSProperties) : undefined;
 
   const selStateLoc = locationSel ? locById[locationSel] : null;
+  // A donation centre / comedor tracks NO patients — showing "0 personas" reads as
+  // "nobody was helped here", alarming and wrong. For those types the header shows the
+  // center kind ("Centro de acopio" / "Comedor") instead of a people count; the body
+  // already carries the how-to-help / who's-in-charge info (refcard / comedorcard).
+  const selHasPatients = selStateLoc ? TYPE_META[selStateLoc.type].hasPatients : true;
   // Status filter belongs to the list header and only for hospitals (INGRESADO/ALTA/
   // FALLECIDO are hospital states; refugios/comedores don't use them).
   const showStatusFilter = selStateLoc?.type === "hospital";
@@ -2540,7 +2545,13 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           <span className="hbar"></span>
           <div className="hrow2">
             <span className="hcount">
-              <b>{list.length}</b> {t.people}
+              {selStateLoc && !selHasPatients ? (
+                <span className="hkind">{TYPE_META[selStateLoc.type][lang]}</span>
+              ) : (
+                <>
+                  <b>{list.length}</b> {t.people}
+                </>
+              )}
             </span>
             <span className="f1"></span>
             {!!locationSel && (
