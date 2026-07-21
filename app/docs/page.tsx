@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Lang } from "@/components/helpmap/data";
-import { FLAG_ICON } from "@/components/helpmap/icons";
+import { DocTopbar } from "./DocTopbar";
 
 type SearchParams = { searchParams: Promise<{ lang?: string }> };
 
@@ -11,9 +11,9 @@ type Lstr = { es: string; en: string; pt: string };
 
 const TITLE: Lstr = { es: "Documentación · HelpMap Venezuela", en: "Documentation · HelpMap Venezuela", pt: "Documentação · HelpMap Venezuela" };
 const DESC: Lstr = {
-  es: "Documentación de HelpMap VE: guía de uso, roadmap, privacidad y manejo de datos. Próximamente.",
-  en: "HelpMap VE documentation: usage guide, roadmap, privacy and data handling. Coming soon.",
-  pt: "Documentação do HelpMap VE: guia de uso, roadmap, privacidade e manejo de dados. Em breve.",
+  es: "Documentación de HelpMap: guía de uso, roadmap, privacidad y cómo colaborar, financiar o desplegar la plataforma.",
+  en: "HelpMap documentation: usage guide, roadmap, privacy, and how to collaborate, fund or deploy the platform.",
+  pt: "Documentação do HelpMap: guia de uso, roadmap, privacidade e como colaborar, financiar ou implantar a plataforma.",
 };
 
 export async function generateMetadata({ searchParams }: SearchParams): Promise<Metadata> {
@@ -28,7 +28,8 @@ export async function generateMetadata({ searchParams }: SearchParams): Promise<
 }
 
 // Sections we plan to publish. `href` flips an item from "coming soon" to a real link.
-const SECTIONS: { title: Lstr; desc: Lstr; href?: string }[] = [
+// `feature` visually highlights a card (used for the partnerships/funding call-out).
+const SECTIONS: { title: Lstr; desc: Lstr; href?: string; feature?: boolean }[] = [
   {
     title: { es: "Guía de uso", en: "Usage guide", pt: "Guia de uso" },
     desc: {
@@ -37,6 +38,16 @@ const SECTIONS: { title: Lstr; desc: Lstr; href?: string }[] = [
       pt: "Como buscar um familiar, explorar o mapa, enviar informações e usar o app sem conexão.",
     },
     href: "/docs/guia",
+  },
+  {
+    title: { es: "Colabora, financia y despliega", en: "Collaborate, fund & deploy", pt: "Colabore, financie e implante" },
+    desc: {
+      es: "Somos código abierto y sin fines de lucro. Financia, aporta en especie, despliega HelpMap en tu país o súmate como aliado.",
+      en: "We're open-source and non-profit. Fund it, give in-kind support, deploy HelpMap in your country or join as an ally.",
+      pt: "Somos código aberto e sem fins lucrativos. Financie, contribua em espécie, implante o HelpMap no seu país ou junte-se como aliado.",
+    },
+    href: "/docs/colabora",
+    feature: true,
   },
   {
     title: { es: "Roadmap", en: "Roadmap", pt: "Roadmap" },
@@ -85,7 +96,7 @@ const T = {
     en: "How HelpMap VE works: usage guide, project roadmap, privacy and data handling, and how to volunteer or collaborate.",
     pt: "Como funciona o HelpMap VE: guia de uso, roadmap do projeto, privacidade e manejo de dados, e como ser voluntário ou colaborar.",
   } as Lstr,
-  view: { es: "Ver", en: "View", pt: "Ver" } as Lstr,
+  forPartners: { es: "Aliados y financistas", en: "Partners & funders", pt: "Parceiros e financiadores" } as Lstr,
   soon: { es: "Próximamente", en: "Coming soon", pt: "Em breve" } as Lstr,
   noteAsk: {
     es: "¿Necesitas algo ahora o quieres colaborar? Escríbenos a ",
@@ -95,92 +106,112 @@ const T = {
   goToMap: { es: "Ir al mapa", en: "Go to the map", pt: "Ir para o mapa" } as Lstr,
 };
 
+// One icon per section (keyed by its /docs/<slug>), shown in a tinted square on each tile.
+const sv = (d: React.ReactNode) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {d}
+  </svg>
+);
+const ICONS: Record<string, React.ReactNode> = {
+  guia: sv(
+    <>
+      <path d="M12 7v13" />
+      <path d="M3 5a1 1 0 0 1 1-1h5a3 3 0 0 1 3 3 3 3 0 0 1 3-3h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a2 2 0 0 0-2 2 2 2 0 0 0-2-2H4a1 1 0 0 1-1-1z" />
+    </>,
+  ),
+  colabora: sv(<path d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z" />),
+  roadmap: sv(
+    <>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V4s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <path d="M4 22v-7" />
+    </>,
+  ),
+  privacidad: sv(
+    <>
+      <path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </>,
+  ),
+  voluntarios: sv(
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </>,
+  ),
+  prensa: sv(
+    <>
+      <path d="m3 11 18-5v12L3 14v-3z" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+    </>,
+  ),
+};
+
 export default async function DocsPage({ searchParams }: SearchParams) {
   const lang = pickLang((await searchParams).lang);
   const t = (o: Lstr) => o[lang];
   const qs = (l: Lang) => (l === "es" ? "" : `?lang=${l}`);
   const withLang = (href: string) => `${href}${qs(lang)}`;
 
+  const slugOf = (href?: string) => href?.split("/").pop() ?? "";
+  const chevron = (
+    <span className="doc-tile-chev" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m9 6 6 6-6 6" />
+      </svg>
+    </span>
+  );
+
   return (
-    <div style={S.wrap}>
-      <div style={S.card}>
-        {/* Nav back to the app + language toggle */}
-        <nav style={S.nav}>
-          <Link href="/" style={S.back}>
-            ← {t(T.backToApp)}
-          </Link>
-          <div style={S.lang}>
-            <Link href={`/docs${qs("es")}`} style={lang === "es" ? S.lgOn : S.lg} aria-label="Español">
-              <span style={S.lgFlag}>{FLAG_ICON.es}</span>ES
-            </Link>
-            <Link href={`/docs${qs("en")}`} style={lang === "en" ? S.lgOn : S.lg} aria-label="English">
-              <span style={S.lgFlag}>{FLAG_ICON.en}</span>EN
-            </Link>
-            <Link href={`/docs${qs("pt")}`} style={lang === "pt" ? S.lgOn : S.lg} aria-label="Português">
-              <span style={S.lgFlag}>{FLAG_ICON.pt}</span>PT
-            </Link>
-          </div>
-        </nav>
+    <div className="doc-wrap">
+      <DocTopbar lang={lang} base="/docs" backLabel={t(T.backToApp)} docsLabel={t(T.h1)} />
+      <div className="doc-content">
+        <div className="doc-card">
+          <div className="doc-kicker">{t(T.kicker)}</div>
+          <h1 className="doc-h1">{t(T.h1)}</h1>
+          <p className="doc-lead">{t(T.lead)}</p>
 
-        <div style={S.kicker}>{t(T.kicker)}</div>
-        <h1 style={S.h1}>{t(T.h1)}</h1>
-        <p style={S.lead}>{t(T.lead)}</p>
-
-        <div style={S.list}>
-          {SECTIONS.map((s) => (
-            <div key={s.title.es} style={S.item}>
-              <div style={S.itemHead}>
-                <span style={S.itemTitle}>{t(s.title)}</span>
-                {s.href ? (
-                  <Link href={withLang(s.href)} style={S.itemLink}>
-                    {t(T.view)}
-                  </Link>
-                ) : (
-                  <span style={S.itemSoon}>{t(T.soon)}</span>
-                )}
+        <div className="doc-grid">
+          {SECTIONS.map((s) =>
+            s.href ? (
+              <Link
+                key={s.title.es}
+                href={withLang(s.href)}
+                className={"doc-tile" + (s.feature ? " doc-tile-feature" : "")}
+              >
+                {chevron}
+                <span className="doc-tile-ic">{ICONS[slugOf(s.href)]}</span>
+                {s.feature && <span className="doc-feature-tag">{t(T.forPartners)}</span>}
+                <span className="doc-tile-title">{t(s.title)}</span>
+                <p className="doc-tile-desc">{t(s.desc)}</p>
+              </Link>
+            ) : (
+              <div key={s.title.es} className="doc-tile doc-tile-soon">
+                <span className="doc-tile-ic">{ICONS[slugOf(s.href)]}</span>
+                <span className="doc-item-soon">{t(T.soon)}</span>
+                <span className="doc-tile-title">{t(s.title)}</span>
+                <p className="doc-tile-desc">{t(s.desc)}</p>
               </div>
-              <p style={S.itemDesc}>{t(s.desc)}</p>
-            </div>
-          ))}
+            ),
+          )}
         </div>
 
-        <p style={S.note}>
+        <p className="doc-note">
           {t(T.noteAsk)}
-          <a href="mailto:info@helpmapvzla.net" style={S.mail}>
+          <a href="mailto:info@helpmapvzla.net" className="doc-mail">
             info@helpmapvzla.net
           </a>
           .
         </p>
 
-        <Link href="/" style={S.primary}>
-          {t(T.goToMap)}
-        </Link>
+          <div className="doc-single">
+            <Link href="/" className="doc-primary">
+              {t(T.goToMap)}
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-
-const S: Record<string, React.CSSProperties> = {
-  wrap: { minHeight: "100dvh", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#f7f8f9", padding: 20, fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#16191f" },
-  card: { width: "100%", maxWidth: 520, background: "#fff", border: "1px solid #ebecef", borderRadius: 18, padding: 24, boxShadow: "0 10px 34px rgba(16,20,28,.10)", marginTop: 24 },
-  nav: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid #ebecef" },
-  back: { fontSize: "0.8125rem", fontWeight: 600, color: "#16191f", textDecoration: "none" },
-  kicker: { fontSize: "0.5938rem", letterSpacing: ".8px", color: "#7b818c", fontWeight: 700, marginBottom: 10 },
-  lang: { display: "flex", border: "1px solid #ebecef", borderRadius: 10, overflow: "hidden", flex: "0 0 auto" },
-  lg: { display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px", fontSize: "0.6875rem", fontWeight: 700, color: "#7b818c", textDecoration: "none", background: "#fff" },
-  lgOn: { display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px", fontSize: "0.6875rem", fontWeight: 700, color: "#fff", textDecoration: "none", background: "#15181d" },
-  lgFlag: { display: "inline-flex", width: 15, height: 10.5, borderRadius: 2, overflow: "hidden", boxShadow: "0 0 0 1px rgba(16,20,28,.15)", flex: "0 0 auto" },
-  soon: { display: "inline-block", fontSize: "0.6875rem", fontWeight: 700, color: "#15803d", background: "#e9f7ef", border: "1px solid #bfe6cf", borderRadius: 999, padding: "4px 11px", marginBottom: 12 },
-  h1: { fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-.5px", margin: "0 0 8px" },
-  lead: { fontSize: "0.875rem", lineHeight: 1.5, color: "#4b5159", margin: "0 0 18px" },
-  list: { display: "flex", flexDirection: "column", border: "1px solid #ebecef", borderRadius: 15, overflow: "hidden" },
-  item: { padding: "14px 15px", borderBottom: "1px solid #ebecef" },
-  itemHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 4 },
-  itemTitle: { fontSize: "0.9063rem", fontWeight: 700 },
-  itemLink: { fontSize: "0.7813rem", fontWeight: 700, color: "#15181d", textDecoration: "none" },
-  itemSoon: { fontSize: "0.6875rem", fontWeight: 600, color: "#7b818c", background: "#f1f2f4", borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap" },
-  itemDesc: { fontSize: "0.8125rem", lineHeight: 1.45, color: "#7b818c", margin: 0 },
-  note: { fontSize: "0.8125rem", lineHeight: 1.5, color: "#4b5159", margin: "18px 0 0" },
-  mail: { color: "#15181d", fontWeight: 600 },
-  primary: { display: "block", textAlign: "center", marginTop: 16, background: "#15181d", color: "#fff", textDecoration: "none", padding: "13px 18px", borderRadius: 12, fontSize: "0.875rem", fontWeight: 600 },
-};

@@ -225,10 +225,11 @@ export const DOCS: DocPage[] = [
         blocks: [
           {
             bullets: [
-              { es: "Agregar y editar personas desde el panel de voluntario.", en: "Add and edit people from the volunteer panel." },
+              { es: "Agregar y editar personas y centros desde el panel de voluntario.", en: "Add and edit people and centres from the volunteer panel." },
               { es: 'Subir listas: fotografía una lista manuscrita o impresa y nosotros la digitalizamos.', en: 'Upload lists: photograph a handwritten or printed list and we digitize it.' },
-              { es: "Tus cambios pasan por revisión del equipo antes de publicarse.", en: "Your changes go through team review before publishing." },
-              { es: "No puedes eliminar registros ni editar centros (eso es de administración).", en: "You can't delete records or edit centres (that's admin)." },
+              { es: "Reportar rescatados con vida y actualizar necesidades de refugios y acopios.", en: "Report people rescued alive and update shelter/donation-centre needs." },
+              { es: "Eres de confianza: lo que publicas se refleja de inmediato, y el acceso es revocable en cualquier momento.", en: "You're trusted: what you publish reflects immediately, and access is revocable at any time." },
+              { es: "Eliminar registros o centros queda solo para administradores.", en: "Deleting records or centres is admin-only." },
             ],
           },
         ],
@@ -258,6 +259,145 @@ export const DOCS: DocPage[] = [
     ],
   },
 
+  // ------------------------------------------------ Colabora, financia y despliega
+  {
+    slug: "colabora",
+    title: { es: "Colabora, financia y despliega", en: "Collaborate, fund & deploy", pt: "Colabore, financie e implante" },
+    intro: {
+      es: "HelpMap ya está en línea y ayudando a reunir familias en Venezuela. Es una respuesta ciudadana, sin fines de lucro y de código abierto, construida para replicarse. Así puedes sumarte: con financiamiento, aporte en especie, desplegándola en tu país o como aliado.",
+      en: "HelpMap is already live and helping reunite families in Venezuela. It's a non-profit, open-source citizen response, built to be replicated. Here's how you can join: with funding, in-kind support, deploying it in your country, or as an ally.",
+    },
+    sections: [
+      {
+        heading: { es: "Por qué apoyar", en: "Why support it" },
+        blocks: [
+          {
+            text: {
+              es: "En una catástrofe, la primera necesidad es saber dónde está tu gente. HelpMap convierte información dispersa —hospitales, refugios, rescatistas, listas manuscritas— en un mapa verificado y buscable, en el teléfono, incluso sin buena señal. Es infraestructura cívica: la sostiene un equipo voluntario y la usan miles de familias.",
+              en: "In a disaster, the first need is knowing where your people are. HelpMap turns scattered information —hospitals, shelters, rescuers, handwritten lists— into a verified, searchable map, on the phone, even on a weak connection. It's civic infrastructure: run by a volunteer team and used by thousands of families.",
+            },
+          },
+        ],
+      },
+      {
+        heading: { es: "Nuestro impacto hasta ahora", en: "Our impact so far" },
+        blocks: [
+          {
+            text: {
+              es: "Construido por un equipo pequeño de voluntarios, en tiempo récord y con recursos mínimos, durante la respuesta al terremoto de junio de 2026. Cifras aproximadas y en crecimiento:",
+              en: "Built by a small volunteer team, in record time and with minimal resources, during the response to the June 2026 earthquake. Approximate and growing figures:",
+            },
+          },
+          {
+            bullets: [
+              { es: "~12.000 registros de datos procesados por la plataforma.", en: "~12,000 data records processed by the platform." },
+              { es: "~4.000 fichas de personas verificadas y depuradas en centros de salud.", en: "~4,000 people records verified and cleaned at health centres." },
+              { es: "~100 refugios y ~90 centros de acopio mapeados, con necesidades en vivo.", en: "~100 shelters and ~90 donation centres mapped, with live needs." },
+              { es: "~50 voluntarios activos, en campo y en línea; ~200 usuarios diarios.", en: "~50 active volunteers, in the field and online; ~200 daily users." },
+              { es: "Cobertura en medios nacionales: Venevisión (TV) y Líder (radio).", en: "National media coverage: Venevisión (TV) and Líder (radio)." },
+            ],
+          },
+        ],
+      },
+      {
+        heading: { es: "Cómo se sostiene: tres pilares", en: "How it's sustained: three pillars" },
+        blocks: [
+          {
+            text: {
+              es: "Nunca cobramos a las personas vulnerables a las que servimos ni vendemos su información. Quienes financian la plataforma son quienes apoyan la misión, no quienes la necesitan. La sostenibilidad se apoya en tres pilares:",
+              en: "We never charge the vulnerable people we serve, nor sell their information. Those who fund the platform are those who support the mission, not those who need it. Sustainability rests on three pillars:",
+            },
+          },
+          {
+            bullets: [
+              { es: "Subvenciones y financiamiento institucional (fondos de impacto social, tecnología cívica y respuesta a desastres).", en: "Grants and institutional funding (social-impact, civic-tech and disaster-response funds)." },
+              { es: "Alianzas de responsabilidad social con el sector privado (patrocinio, aporte en especie, campañas conjuntas).", en: "Corporate social-responsibility partnerships (sponsorship, in-kind support, joint campaigns)." },
+              { es: "Marco de código abierto replicable: desplegable en cualquier crisis o país, lo que abre financiamiento internacional.", en: "A replicable open-source framework: deployable in any crisis or country, which opens international funding." },
+            ],
+          },
+        ],
+      },
+      {
+        heading: { es: "Financia y patrocina", en: "Fund & sponsor" },
+        blocks: [
+          {
+            text: {
+              es: "Tu aporte sostiene y escala la operación. En concreto, el financiamiento cubre:",
+              en: "Your support sustains and scales the operation. Concretely, funding covers:",
+            },
+          },
+          {
+            bullets: [
+              { es: "Infraestructura: servidores, base de datos, dominio y envíos.", en: "Infrastructure: servers, database, domain and messaging." },
+              { es: "Verificación en campo: contactos y logística para confirmar cada dato.", en: "Field verification: contacts and logistics to confirm each record." },
+              { es: "Equipo y coordinación para mantener la respuesta activa 24/7.", en: "Team and coordination to keep the response active 24/7." },
+              { es: "Difusión para que las familias afectadas encuentren la herramienta.", en: "Outreach so affected families find the tool." },
+            ],
+          },
+          {
+            text: {
+              es: "Somos transparentes: sin fines de lucro, sin publicidad y sin venta de datos. El dinero va a la operación.",
+              en: "We're transparent: non-profit, no ads and no data sales. Funds go to the operation.",
+            },
+          },
+        ],
+      },
+      {
+        heading: { es: "Aporte en especie (sector privado)", en: "In-kind support (private sector)" },
+        blocks: [
+          {
+            text: {
+              es: "Llamamos a las empresas a colaborar con esta acción cívica sin necesidad de un cheque:",
+              en: "We call on companies to collaborate with this civic action without needing a cheque:",
+            },
+          },
+          {
+            bullets: [
+              { es: "Conectividad y datos móviles para el equipo en campo.", en: "Connectivity and mobile data for the field team." },
+              { es: "Hosting, créditos de nube y herramientas técnicas.", en: "Hosting, cloud credits and technical tooling." },
+              { es: "Redes médicas, hospitalarias y logísticas para verificar y trasladar.", en: "Medical, hospital and logistics networks to verify and transfer." },
+              { es: "Difusión: medios, telecom y marcas que amplíen el alcance.", en: "Outreach: media, telecom and brands that amplify reach." },
+            ],
+          },
+        ],
+      },
+      {
+        heading: { es: "Despliega HelpMap en tu país o región", en: "Deploy HelpMap in your country or region" },
+        blocks: [
+          {
+            text: {
+              es: "HelpMap está pensado para replicarse. La emergencia fue en Venezuela, pero la necesidad —reunir familias, coordinar ayuda, dar información veraz— es universal. Si tu gobierno, ONG u organización quiere desplegar una instancia ante una emergencia, hablemos: buscamos que montar una nueva sea cuestión de horas, no de semanas.",
+              en: "HelpMap is built to be replicated. The emergency was in Venezuela, but the need —reuniting families, coordinating aid, giving truthful information— is universal. If your government, NGO or organization wants to deploy an instance in an emergency, let's talk: our goal is to make standing up a new one a matter of hours, not weeks.",
+            },
+          },
+        ],
+      },
+      {
+        heading: { es: "Súmate como aliado o voluntario", en: "Join as an ally or volunteer" },
+        blocks: [
+          {
+            text: {
+              es: "Esta es acción cívica: los civiles dan su parte. Organizaciones y medios pueden ser aliados y multiplicadores; el personal de salud y rescate puede sumarse como voluntario verificado. Cada quien aporta desde donde está.",
+              en: "This is civic action: civilians do their part. Organizations and media can be allies and multipliers; health and rescue staff can join as vetted volunteers. Everyone contributes from where they are.",
+            },
+          },
+        ],
+      },
+      {
+        heading: { es: "Hablemos", en: "Let's talk" },
+        blocks: [
+          {
+            bullets: [
+              { es: "Escríbenos a info@helpmapvzla.net con el asunto \"Alianza\" o \"Financiamiento\".", en: "Write to info@helpmapvzla.net with the subject \"Partnership\" or \"Funding\"." },
+              { es: "Sitio: helpmapvzla.net · Instagram: @helpmapvzla", en: "Site: helpmapvzla.net · Instagram: @helpmapvzla" },
+              { es: "Por Tropical Sadness x Imágenes Nacionales — un esfuerzo ciudadano.", en: "By Tropical Sadness x Imágenes Nacionales — a citizen effort." },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+
   // ------------------------------------------------------- Para prensa y aliados
   {
     slug: "prensa",
@@ -272,8 +412,8 @@ export const DOCS: DocPage[] = [
         blocks: [
           {
             text: {
-              es: "Un mapa humanitario para reunir familias tras el terremoto de junio de 2026, ayudando a ubicar a personas ingresadas en hospitales o en refugios en Caracas (Distrito Capital), La Guaira, Miranda y estados ampliados.",
-              en: "A humanitarian map to reunite families after the June 2026 earthquake, helping locate people admitted to hospitals or sheltered in Caracas (Distrito Capital), La Guaira, Miranda and expanded states.",
+              es: "Una plataforma abierta para localizar personas y ayuda en emergencias. Está en línea en helpmapvzla.net desde la respuesta al terremoto de junio de 2026, y ayuda a ubicar a personas ingresadas en hospitales o en refugios —y a encontrar refugios y centros de acopio— en Caracas (Distrito Capital), La Guaira, Miranda y estados ampliados. Es de código abierto y sin fines de lucro.",
+              en: "An open platform to locate people and help in emergencies. It's live at helpmapvzla.net since the response to the June 2026 earthquake, helping locate people admitted to hospitals or sheltered —and find shelters and donation centres— in Caracas (Distrito Capital), La Guaira, Miranda and expanded states. It's open-source and non-profit.",
             },
           },
         ],
@@ -283,9 +423,28 @@ export const DOCS: DocPage[] = [
         blocks: [
           {
             text: {
-              es: "Un equipo voluntario: Tropical Sadness x Imágenes Nacionales, junto a personal de salud y rescate. Es un esfuerzo ciudadano, sin fines de lucro.",
-              en: "A volunteer team: Tropical Sadness x Imágenes Nacionales, together with health and rescue staff. It's a non-profit citizen effort.",
+              es: "Un equipo de tres desarrolladores voluntarios (Mérida, Venezuela) —Tropical Sadness x Imágenes Nacionales— junto a una red de personal de salud, rescate y voluntariado civil. Es un esfuerzo ciudadano, sin fines de lucro.",
+              en: "A team of three volunteer developers (Mérida, Venezuela) —Tropical Sadness x Imágenes Nacionales— together with a network of health, rescue and civic-volunteer staff. It's a non-profit citizen effort.",
             },
+          },
+        ],
+      },
+      {
+        heading: { es: "Impacto y reconocimiento", en: "Impact & recognition" },
+        blocks: [
+          {
+            text: {
+              es: "Construido en tiempo récord y con recursos mínimos durante la emergencia. Cifras aproximadas y en crecimiento:",
+              en: "Built in record time and with minimal resources during the emergency. Approximate and growing figures:",
+            },
+          },
+          {
+            bullets: [
+              { es: "~12.000 registros procesados y ~4.000 fichas verificadas en centros de salud.", en: "~12,000 records processed and ~4,000 records verified at health centres." },
+              { es: "~100 refugios y ~90 centros de acopio mapeados con necesidades en vivo.", en: "~100 shelters and ~90 donation centres mapped with live needs." },
+              { es: "~50 voluntarios activos y ~200 usuarios diarios.", en: "~50 active volunteers and ~200 daily users." },
+              { es: "Reseñado por medios nacionales: Venevisión (TV) y Líder (radio).", en: "Featured by national media: Venevisión (TV) and Líder (radio)." },
+            ],
           },
         ],
       },

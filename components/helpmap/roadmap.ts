@@ -36,16 +36,16 @@ export interface Phase {
 export const ROADMAP_TITLE: LS = { es: "Roadmap", en: "Roadmap", pt: "Roadmap" };
 
 export const ROADMAP_INTRO: LS = {
-  es: "En qué estamos y hacia dónde vamos. HelpMap VE está listo para su lanzamiento: abajo ves lo que ya funciona y lo que viene después. Es una guía de producto que evoluciona; el equipo decide las prioridades.",
-  en: "Where we are and where we're headed. HelpMap VE is ready to launch: below is what already works and what comes next. It's an evolving product guide; the team sets the priorities.",
-  pt: "Em que ponto estamos e para onde vamos. O HelpMap VE está pronto para o lançamento: abaixo você vê o que já funciona e o que vem a seguir. É um guia de produto em evolução; a equipe define as prioridades.",
+  es: "HelpMap está EN LÍNEA y funcionando. Nació como respuesta ciudadana al terremoto de junio de 2026 en Venezuela; hoy lo estamos convirtiendo en una plataforma cívica replicable, para que cualquier comunidad o país pueda desplegarla ante una emergencia. Abajo: lo que ya funciona y hacia dónde vamos.",
+  en: "HelpMap is LIVE and working. It began as a citizen response to the June 2026 earthquake in Venezuela; today we're turning it into a replicable civic platform, so any community or country can deploy it in an emergency. Below: what already works and where we're headed.",
+  pt: "O HelpMap está NO AR e funcionando. Nasceu como resposta cidadã ao terremoto de junho de 2026 na Venezuela; hoje estamos transformando-o em uma plataforma cívica replicável, para que qualquer comunidade ou país possa implantá-lo em uma emergência. Abaixo: o que já funciona e para onde vamos.",
 };
 
 // Short banner highlighting the current phase.
 export const ROADMAP_NOW: LS = {
-  es: "Fase actual: Lanzamiento — listos para salir.",
-  en: "Current phase: Launch — ready to go live.",
-  pt: "Fase atual: Lançamento — prontos para ir ao ar.",
+  es: "Fase actual: Consolidación y sostenibilidad — sostener la operación en Venezuela y abrir la plataforma a aliados, financistas y otros países.",
+  en: "Current phase: Consolidation & sustainability — keep the operation running in Venezuela and open the platform to allies, funders and other countries.",
+  pt: "Fase atual: Consolidação e sustentabilidade — manter a operação na Venezuela e abrir a plataforma a aliados, financiadores e outros países.",
 };
 
 export const ROADMAP_PHASES: Phase[] = [
@@ -89,13 +89,18 @@ export const ROADMAP_PHASES: Phase[] = [
   {
     id: "p2",
     title: { es: "Fase 2 · Lanzamiento", en: "Phase 2 · Launch", pt: "Fase 2 · Lançamento" },
-    status: "current",
-    note: { es: "Estamos aquí.", en: "We are here.", pt: "Estamos aqui." },
+    status: "done",
+    note: { es: "Lanzada y en uso.", en: "Launched and in use.", pt: "Lançada e em uso." },
     items: [
       {
-        es: "Cobertura inicial: Distrito Capital, La Guaira y Miranda, con estados ampliados habilitados.",
-        en: "Initial coverage: Distrito Capital, La Guaira and Miranda, with expanded states enabled.",
-        pt: "Cobertura inicial: Distrito Capital, La Guaira e Miranda, com estados ampliados habilitados.",
+        es: "App en línea en helpmapvzla.net, instalable en el teléfono (PWA).",
+        en: "App live at helpmapvzla.net, installable on your phone (PWA).",
+        pt: "App no ar em helpmapvzla.net, instalável no telefone (PWA).",
+      },
+      {
+        es: "Cobertura de Distrito Capital, La Guaira y Miranda, con estados ampliados habilitados.",
+        en: "Coverage of Distrito Capital, La Guaira and Miranda, with expanded states enabled.",
+        pt: "Cobertura de Distrito Capital, La Guaira e Miranda, com estados ampliados habilitados.",
       },
       {
         es: "Panel de administración: gestión de centros y personas.",
@@ -113,52 +118,127 @@ export const ROADMAP_PHASES: Phase[] = [
         pt: 'Doações: organizações parceiras e CTA "quero aparecer aqui".',
       },
       {
-        es: "Capa de daños / intensidad sentida del sismo.",
-        en: "Damage / felt-intensity layer of the quake.",
-        pt: "Camada de danos / intensidade sentida do terremoto.",
+        es: "Capa de daños / intensidad sentida del sismo (datos USGS + campo).",
+        en: "Damage / felt-intensity layer of the quake (USGS + field data).",
+        pt: "Camada de danos / intensidade sentida do terremoto (dados USGS + campo).",
       },
       {
-        es: "Datos confirmados en campo con contactos en centros de salud.",
-        en: "Data confirmed in the field with contacts at health centres.",
-        pt: "Dados confirmados em campo com contatos em centros de saúde.",
-      },
-      {
-        es: "Difusión y contacto por redes (@helpmapvzla) — esfuerzo ciudadano.",
-        en: "Outreach and contact via social (@helpmapvzla) — a citizen effort.",
-        pt: "Divulgação e contato por redes sociais (@helpmapvzla) — esforço cidadão.",
+        es: "App multiidioma: español, inglés y portugués — para la diáspora y aliados.",
+        en: "Multilingual app: Spanish, English and Portuguese — for the diaspora and allies.",
+        pt: "App multilíngue: espanhol, inglês e português — para a diáspora e aliados.",
       },
     ],
   },
   {
     id: "p3",
-    title: { es: "Fase 3 · Después del lanzamiento", en: "Phase 3 · Post-launch", pt: "Fase 3 · Após o lançamento" },
-    status: "next",
+    title: { es: "Fase 3 · Red viva y confianza", en: "Phase 3 · Living network & trust", pt: "Fase 3 · Rede viva e confiança" },
+    status: "done",
+    note: {
+      es: "Funciones ya en producción tras el lanzamiento.",
+      en: "Features already in production after launch.",
+      pt: "Funcionalidades já em produção após o lançamento.",
+    },
     items: [
       {
-        es: 'Centros de acopio con "lo más necesitado hoy" + WhatsApp al coordinador.',
-        en: 'Donation centres with "most needed today" + WhatsApp to the coordinator.',
-        pt: 'Centros de doação com "o mais necessário hoje" + WhatsApp para o coordenador.',
+        es: 'Rescatados: red de "está vivo, fue rescatado" antes del traslado a un centro.',
+        en: 'Rescued: an "alive, was rescued" network before transfer to a centre.',
+        pt: 'Resgatados: rede de "está vivo, foi resgatado" antes da transferência a um centro.',
       },
       {
-        es: 'Conteos por ubicación y "última actualización" visible para dar confianza.',
-        en: 'Per-location counts and a visible "last updated" to build trust.',
-        pt: 'Contagens por local e "última atualização" visível para gerar confiança.',
+        es: 'Refugios y centros de acopio con "qué reciben / qué necesitan hoy" + cómo llegar y WhatsApp (integración con AcopioVE).',
+        en: 'Shelters and donation centres with "what they receive / need today" + directions and WhatsApp (AcopioVE integration).',
+        pt: 'Abrigos e centros de doação com "o que recebem / precisam hoje" + como chegar e WhatsApp (integração com AcopioVE).',
       },
       {
-        es: "OCR de listas manuscritas hacia la cola de revisión.",
-        en: "OCR of handwritten lists into the review queue.",
-        pt: "OCR de listas manuscritas para a fila de revisão.",
+        es: "Aportes del público: ponerle cara y datos a un registro existente, con moderación del equipo.",
+        en: "Public contributions: put a face and details to an existing record, with team moderation.",
+        pt: "Contribuições do público: dar rosto e dados a um registro existente, com moderação da equipe.",
       },
       {
-        es: '"Yo lo vi": actualizaciones de estado aportadas por familiares.',
-        en: '"Yo lo vi": status updates contributed by families.',
-        pt: '"Eu o vi": atualizações de status enviadas por familiares.',
+        es: "Reportar desaparecido: las familias piden al equipo buscar a alguien en la base.",
+        en: "Report a missing person: families ask the team to search someone in the database.",
+        pt: "Reportar desaparecido: as famílias pedem à equipe buscar alguém na base.",
+      },
+      {
+        es: 'Confianza: conteos por centro, "última actualización" visible y registro de auditoría de cambios.',
+        en: 'Trust: per-centre counts, a visible "last updated" and an audit log of changes.',
+        pt: 'Confiança: contagens por centro, "última atualização" visível e registro de auditoria de mudanças.',
+      },
+      {
+        es: "API pública (solo lectura, verificados) para que otras iniciativas humanitarias reutilicen los datos confirmados.",
+        en: "Public read-only API (verified records) so other humanitarian efforts can reuse the confirmed data.",
+        pt: "API pública (somente leitura, verificados) para que outras iniciativas humanitárias reutilizem os dados confirmados.",
       },
     ],
   },
   {
     id: "p4",
-    title: { es: "Fase 4 · Futuro", en: "Phase 4 · Future", pt: "Fase 4 · Futuro" },
+    title: { es: "Fase 4 · Consolidación y sostenibilidad", en: "Phase 4 · Consolidation & sustainability", pt: "Fase 4 · Consolidação e sustentabilidade" },
+    status: "current",
+    note: { es: "Estamos aquí — buscamos aliados y financiamiento.", en: "We are here — seeking allies and funding.", pt: "Estamos aqui — buscamos aliados e financiamento." },
+    items: [
+      {
+        es: "Financiamiento y patrocinio para sostener y escalar la operación: infraestructura, verificación en campo y equipo.",
+        en: "Funding and sponsorship to sustain and scale the operation: infrastructure, field verification and the team.",
+        pt: "Financiamento e patrocínio para sustentar e escalar a operação: infraestrutura, verificação em campo e equipe.",
+      },
+      {
+        es: "Llamado al sector privado: aporte en especie (conectividad, hosting/cloud, redes médicas y logísticas, difusión).",
+        en: "Call to the private sector: in-kind support (connectivity, hosting/cloud, medical and logistics networks, outreach).",
+        pt: "Chamado ao setor privado: apoio em espécie (conectividade, hosting/cloud, redes médicas e logísticas, divulgação).",
+      },
+      {
+        es: "Red de aliados: organizaciones, medios y ciudadanos que multiplican la acción cívica.",
+        en: "Ally network: organizations, media and citizens who multiply the civic action.",
+        pt: "Rede de aliados: organizações, mídia e cidadãos que multiplicam a ação cívica.",
+      },
+      {
+        es: "Ampliar cobertura verificada a más estados, según llegue el dato confirmado.",
+        en: "Expand verified coverage to more states as confirmed data arrives.",
+        pt: "Ampliar a cobertura verificada a mais estados, conforme chega o dado confirmado.",
+      },
+      {
+        es: "OCR de listas manuscritas hacia la cola de revisión (automatizar la digitalización).",
+        en: "OCR of handwritten lists into the review queue (automate digitization).",
+        pt: "OCR de listas manuscritas para a fila de revisão (automatizar a digitalização).",
+      },
+    ],
+  },
+  {
+    id: "p5",
+    title: { es: "Fase 5 · Plataforma replicable (multi-país)", en: "Phase 5 · Replicable platform (multi-country)", pt: "Fase 5 · Plataforma replicável (multi-país)" },
+    status: "next",
+    note: {
+      es: "El objetivo: que cualquier país despliegue HelpMap ante una emergencia.",
+      en: "The goal: any country can deploy HelpMap in an emergency.",
+      pt: "O objetivo: qualquer país pode implantar o HelpMap em uma emergência.",
+    },
+    items: [
+      {
+        es: "Generalizar más allá de Venezuela: geografía, idiomas y centros configurables, sin tocar el código.",
+        en: "Generalize beyond Venezuela: configurable geography, languages and centres, without touching the code.",
+        pt: "Generalizar além da Venezuela: geografia, idiomas e centros configuráveis, sem tocar no código.",
+      },
+      {
+        es: "Despliegue sencillo: montar una instancia para una nueva emergencia en horas, no semanas.",
+        en: "Easy deployment: stand up an instance for a new emergency in hours, not weeks.",
+        pt: "Implantação simples: subir uma instância para uma nova emergência em horas, não semanas.",
+      },
+      {
+        es: "Modelo de participación cívica reutilizable: voluntarios verificados, aportes del público y aliados locales.",
+        en: "Reusable civic-participation model: vetted volunteers, public contributions and local allies.",
+        pt: "Modelo de participação cívica reutilizável: voluntários verificados, contribuições do público e aliados locais.",
+      },
+      {
+        es: "Guía de despliegue y buenas prácticas de privacidad para nuevos equipos.",
+        en: "Deployment guide and privacy best-practices for new teams.",
+        pt: "Guia de implantação e boas práticas de privacidade para novas equipes.",
+      },
+    ],
+  },
+  {
+    id: "p6",
+    title: { es: "Fase 6 · Futuro", en: "Phase 6 · Future", pt: "Fase 6 · Futuro" },
     status: "later",
     items: [
       {
@@ -180,11 +260,6 @@ export const ROADMAP_PHASES: Phase[] = [
         es: "Accesibilidad ampliada: alto contraste, búsqueda por voz.",
         en: "Expanded accessibility: high contrast, voice search.",
         pt: "Acessibilidade ampliada: alto contraste, busca por voz.",
-      },
-      {
-        es: "Alcance a la diáspora (familiares en el exterior).",
-        en: "Diaspora reach (relatives abroad).",
-        pt: "Alcance à diáspora (familiares no exterior).",
       },
     ],
   },

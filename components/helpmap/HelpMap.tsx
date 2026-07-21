@@ -8,8 +8,6 @@ import {
   T,
   TYPE_META,
   norm,
-  protectMinor,
-  protectMinorRescatado,
   type Donation,
   type Estatus,
   type Lang,
@@ -20,7 +18,6 @@ import {
   type Rescatado,
   type RescatadoPublic,
   type Sexo,
-  type VolunteerRequest,
   type VzlaState,
 } from "./data";
 import { createClient } from "@/utils/supabase/client";
@@ -39,12 +36,10 @@ import {
   telegramUrl,
   whatsappUrl,
 } from "./share";
-import { loadLeaflet, loadLeafletHeat, loadLeafletCluster } from "./leaflet-loader";
-import { fetchDamageData, SEED_DAMAGE, type DamageData } from "./usgsQuake";
 import Tour from "./Tour";
 import "./helpmap.css";
 
-import { ICON, TYPE_ICON, TYPE_ICON_SVG, FLAG_ICON } from "./icons";
+import { ICON, TYPE_ICON, FLAG_ICON } from "./icons";
 import { CenterPicker } from "./CenterPicker";
 import { StatePicker } from "./StatePicker";
 import { Avatar } from "./Avatar";
@@ -59,75 +54,26 @@ import { ContactView } from "./ContactView";
 import { ContributeView } from "./ContributeView";
 import { VolunteerView } from "./VolunteerView";
 import { ReportView } from "./ReportView";
-import { timeAgo, localeOf, veStateFromAddress, municipalityFromAddress, parseLatLng } from "./helpers";
+import AdminPanel from "./AdminPanel";
+import { AdminProvider } from "./AdminContext";
+import { useHelpMapData } from "./useHelpMapData";
+import { useStaffFeed } from "./useStaffFeed";
+import { useMapMarkers } from "./useMapMarkers";
+import { timeAgo, veStateFromAddress, municipalityFromAddress, parseLatLng } from "./helpers";
 import {
   INSTAGRAM_HANDLE,
   INSTAGRAM_URL,
-  VOL_PROFILES,
-  AUDIT_LABEL,
-  CACHE_KEY,
   TOUR_KEY,
   STAFF_TOUR_KEY,
 } from "./constants";
 import type {
   View,
   AdminTab,
-  AuditEntry,
-  MissingReport,
   EditType,
   Draft,
   AuthUser,
   HelpMapProps,
 } from "./types";
-
-// Different types that cluster over the same metro area would otherwise stack on nearly
-// the same pixel (a hospital, shelter, comedor… pin piled on top of each other). We fan
-// each type out in a fixed direction by a few px so all of them — and their count badges —
-// stay visible. A cluster already sits at its children's average point, so a small nudge
-// is visually harmless. Order matches TYPE_META (hospital, shelter, morgue, donation, comedor).
-// Offsets form an arc wide enough that pin HEADS (where the icon lives) don't overlap a
-// neighbour: pins are 28px wide, so ≥20px horizontal spacing + vertical stagger keeps
-// each type's icon and badge readable even when all five types cluster on one metro.
-const CLUSTER_FAN: Record<LocationType, [number, number]> = {
-  hospital: [-40, -4],
-  shelter: [-20, -14],
-  morgue: [0, -18],
-  donation_centre: [20, -14],
-  comedor: [40, -4],
-};
-
-// Builds a per-type cluster badge: a location pin tinted with the type color, the type
-// icon in white inside its head, and a small count bubble. Because each map type has its
-// own cluster group, a cluster is always one type — so you can read "3 hospitales aquí"
-// at a glance instead of one anonymous mixed circle.
-// The icon AND the count badge are both NESTED INSIDE the pin's own <svg> (not
-// absolutely-positioned siblings): Leaflet marker stacking is unpredictable across
-// markers — a neighbouring fanned-out pin can paint over a separate HTML layer sitting
-// on top of it. One svg = one paint, nothing (including another marker) can cover it.
-function clusterPinHtml(type: LocationType, n: number): string {
-  const color = TYPE_META[type].color;
-  const [dx, dy] = CLUSTER_FAN[type];
-  // Type icon re-rooted inside the pin svg, forced white (its stroke is currentColor).
-  const icon = TYPE_ICON_SVG[type].replace(
-    "<svg ",
-    '<svg x="5.5" y="5" width="13" height="13" style="color:#fff" ',
-  );
-  const label = n > 99 ? "99+" : String(n);
-  const badgeR = label.length > 2 ? 9 : label.length > 1 ? 8 : 6.5;
-  const badgeFont = label.length > 2 ? 6.5 : 7.5;
-  const badge =
-    '<circle class="mkcl-badge-bg" cx="20" cy="4" r="' + badgeR + '"/>' +
-    '<text class="mkcl-badge-text" x="20" y="4.5" font-size="' + badgeFont + '">' + label + "</text>";
-  return (
-    '<div class="mkcl" style="color:' + color + ";transform:translate(" + dx + "px," + dy + 'px)">' +
-    '<svg class="mkcl-pin" viewBox="0 0 24 34" aria-hidden="true">' +
-    '<path d="M12 0C5.37 0 0 5.37 0 12c0 8.5 12 22 12 22s12-13.5 12-22C24 5.37 18.63 0 12 0z" fill="currentColor" stroke="#fff" stroke-width="1.7"/>' +
-    icon +
-    badge +
-    "</svg>" +
-    "</div>"
-  );
-}
 
 export default function HelpMap({ accent, mapLabels = true, showReport = true }: HelpMapProps) {
   const [lang, setLang] = useState<Lang>("es");
@@ -159,21 +105,26 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     Array<{ lat: number; lng: number; label: string; address?: Record<string, string> }>
   >([]);
   const [pickingOnMap, setPickingOnMap] = useState(false); // "ubicar tocando el mapa" mode (center form)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const draftMarkerRef = useRef<any>(null); // draggable pin for the center being placed
 
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [patients, setPatients] = useState<PatientPublic[]>([]);
-  const [donations, setDonations] = useState<Donation[]>([]);
-  const [rescatados, setRescatados] = useState<RescatadoPublic[]>([]); // rescued, not yet transferred (no map pin)
-  const [refugios, setRefugios] = useState<Refugio[]>([]); // shelter needs/donations info (companion to shelter locations)
-  const [rescAdmin, setRescAdmin] = useState<Rescatado[]>([]); // staff-only full base rows for the admin tab
-  const [stale, setStale] = useState(false);
-  const [maintenance, setMaintenance] = useState(false); // site-wide maintenance banner (admin toggle, app_settings)
+  // Lazily-created Supabase client (anon key), shared by the data hook + all handlers.
+  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
+  const getSupabase = () => {
+    if (!supabaseRef.current) supabaseRef.current = createClient();
+    return supabaseRef.current;
+  };
+
+  // Public dataset (cache-first + revalidate) lives in a dedicated hook (§14 Phase 3).
+  const {
+    locations, setLocations,
+    patients, setPatients,
+    donations, setDonations,
+    rescatados, setRescatados,
+    refugios, setRefugios,
+    maintenance, setMaintenance,
+    stale,
+  } = useHelpMapData(getSupabase);
   const [maintBusy, setMaintBusy] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
   const [showHeat, setShowHeat] = useState(false); // damage heat overlay off by default (user toggles "Daños")
-  const [damage, setDamage] = useState<DamageData>(SEED_DAMAGE); // USGS-fed, seed fallback
   // "Mi ubicación": the visitor's own GPS position, shown as a blue dot so they can
   // orient themselves on the map. Requested explicitly (button tap), never on load —
   // asking for location permission unprompted is unexpected and often auto-denied.
@@ -191,10 +142,19 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [recoverMode, setRecoverMode] = useState(false); // "forgot password" sub-view
   const [recoverSent, setRecoverSent] = useState(false);
 
+  // Staff feed (moderation queues + audit log + volunteer roster) lives in a dedicated
+  // hook (§14 Phase 3): owns the state + loaders + the preload/60s-polling effects.
+  const {
+    contribs, setContribs,
+    reports, setReports,
+    audit,
+    rescAdmin, setRescAdmin,
+    volReqs, setVolReqs,
+    volunteers, setVolunteers,
+    loadContributions, loadReports, loadAudit, loadRescAdmin, loadVolunteers, loadVolRequests,
+  } = useStaffFeed(getSupabase, isAdmin, isVolunteer, view);
+
   // Volunteer management (admin) + list upload (staff)
-  const [volunteers, setVolunteers] = useState<{ user_id: string; email: string }[]>([]);
-  const [volReqs, setVolReqs] = useState<VolunteerRequest[]>([]); // pending applications (admin)
-  const [reports, setReports] = useState<MissingReport[]>([]); // pending missing-person reports (staff)
   const [volEmail, setVolEmail] = useState("");
   const [volPass, setVolPass] = useState("");
   const [volBusy, setVolBusy] = useState(false);
@@ -216,15 +176,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // is only reached from the volunteer / donations CTAs (no generic contact entry).
   const [contactKind, setContactKind] = useState<"volunteer" | "donation" | "contact">("contact");
 
-  // Public "Aportar foto / info" on an existing record (→ contributions moderation
-  // queue, NOT the intake funnel — intake is for people not yet in the system).
-  // Staff review queue (admin/volunteer)
-  const [contribs, setContribs] = useState<
-    { id: string; patient_id: string; patient_name: string; foto_url: string | null; descripcion: string | null; contacto: string | null }[]
-  >([]);
-  // Activity feed ("Novedades") — recent changes from the DB audit_log.
-  const [audit, setAudit] = useState<AuditEntry[]>([]);
-
   // Public intake form + offline queue
   // FAB "+" menu (Reportar desaparecido / Aportar datos).
   const [fabOpen, setFabOpen] = useState(false);
@@ -241,31 +192,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // Upper bound for the "fecha del dato" pickers — data can't be from the future.
   const todayISO = new Date().toISOString().slice(0, 10);
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const markersRef = useRef<Record<string, any>>({});
-  // One L.markerClusterGroup PER type, keyed by LocationType (null if plugin failed), so
-  // clusters never mix types. e.g. clusterRef.current.hospital, .shelter, …
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clusterRef = useRef<Record<string, any> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tileLayerRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const heatRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const quakeLayerRef = useRef<any>(null); // aftershock markers (USGS)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const myLocMarkerRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const myLocCircleRef = useRef<any>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
-  const getSupabase = () => {
-    if (!supabaseRef.current) supabaseRef.current = createClient();
-    return supabaseRef.current;
-  };
 
   const locById = useMemo(() => {
     const m: Record<string, Location> = {};
@@ -368,6 +295,27 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     toastTimer.current = setTimeout(() => setToast(""), 1900);
   }, []);
 
+  // The Leaflet map subsystem (init + marker/overlay effects + damage heat) lives in a hook
+  // (§14 Phase 3). onMarkerRef is created HERE, before the hook, so `onMarker` below — which
+  // reads the hook's mapRef — is wired into it via the sync effect (breaks the ref cycle).
+  const onMarkerRef = useRef<(id: string) => void>(() => {});
+  const { containerRef, mapRef, markersRef, clusterRef, damage } = useMapMarkers({
+    mapLabels,
+    mapLocations,
+    patients,
+    tsMatch,
+    locationSel,
+    focusId,
+    refugioById,
+    editType,
+    draft,
+    setDraft,
+    pickingOnMap,
+    showHeat,
+    myLoc,
+    onMarkerRef,
+  });
+
   // "Mi ubicación" button: one-shot GPS read, recenters the map and drops a blue "you
   // are here" dot (see the marker effect below). Never runs automatically.
   const locateMe = useCallback(() => {
@@ -391,7 +339,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
     );
-  }, [showToast, t]);
+  }, [showToast, t, mapRef]);
 
   // ---- Auth session ------------------------------------------------------
   useEffect(() => {
@@ -495,194 +443,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     };
   }, [showToast, t.synced]);
 
-  // ---- Data: cache-first, then revalidate from Supabase ------------------
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let hadCache = false;
-      try {
-        const raw = localStorage.getItem(CACHE_KEY);
-        if (raw) {
-          const c = JSON.parse(raw) as {
-            locations?: Location[];
-            patients?: PatientPublic[];
-            donations?: Donation[];
-            rescatados?: RescatadoPublic[];
-            refugios?: Refugio[];
-          };
-          if (Array.isArray(c.locations)) {
-            setLocations(c.locations);
-            hadCache = c.locations.length > 0;
-          }
-          // Re-enforce minor protection on cached data — a stale/poisoned cache
-          // must never reintroduce a minor photo/CI (CLAUDE.md §2).
-          if (Array.isArray(c.patients)) setPatients(c.patients.map(protectMinor));
-          if (Array.isArray(c.donations)) setDonations(c.donations);
-          if (Array.isArray(c.rescatados)) setRescatados(c.rescatados.map(protectMinorRescatado));
-          if (Array.isArray(c.refugios)) setRefugios(c.refugios);
-        }
-      } catch {
-        /* ignore */
-      }
-      try {
-        const supabase = getSupabase();
-        // PostgREST caps a single response at db-max-rows (default 1000), so `.limit()`
-        // alone silently truncates once we pass ~1000 records (the "1000 personas" bug).
-        // Page through with .range() until a short page comes back to fetch them all.
-        const fetchAll = async (
-          table: string,
-          orderCol: string,
-        ): Promise<{ data: any[] | null; error: any }> => {
-          const PAGE = 1000;
-          const all: any[] = [];
-          for (let from = 0; ; from += PAGE) {
-            const { data, error } = await supabase
-              .from(table)
-              .select("*")
-              .order(orderCol, { ascending: false })
-              .range(from, from + PAGE - 1);
-            if (error) return { data: null, error };
-            const rows = data ?? [];
-            all.push(...rows);
-            if (rows.length < PAGE) break; // last page
-          }
-          return { data: all, error: null };
-        };
-        const [locRes, patRes, donRes, setRes, rescRes, refRes] = await Promise.all([
-          supabase.from("locations").select("*").eq("active", true),
-          // Reads the privacy-filtered VIEW, never the base table (CLAUDE.md §2).
-          fetchAll("patients_public", "updated_at"),
-          supabase.from("donations").select("*").eq("active", true).order("sort", { ascending: true }),
-          // Maintenance flag — non-critical; tolerate the table not existing yet.
-          supabase.from("app_settings").select("maintenance").eq("id", 1).maybeSingle(),
-          // Rescued (not-yet-transferred) people — privacy-filtered VIEW, non-critical.
-          fetchAll("rescatados_public", "created_at"),
-          // Shelter needs/donations info — non-critical; tolerate the table not existing yet.
-          supabase.from("refugios").select("*"),
-        ]);
-        if (cancelled) return;
-        if (locRes.error) throw locRes.error;
-        if (patRes.error) throw patRes.error;
-        // Maintenance banner: best-effort, never blocks the load.
-        if (!setRes.error && setRes.data) setMaintenance(!!setRes.data.maintenance);
-        // Donations are non-critical: if the table/policies aren't there yet, don't
-        // blow up the whole load — keep whatever we have (cache/seed).
-        const dons = donRes.error ? null : ((donRes.data ?? []) as Donation[]);
-        // Rescatados are non-critical too (table may not exist yet). Minor-protected.
-        const resc = rescRes.error ? null : ((rescRes.data ?? []) as RescatadoPublic[]).map(protectMinorRescatado);
-        // Refugios are non-critical (table may not exist yet); no privacy filter needed.
-        const refs = refRes.error ? null : ((refRes.data ?? []) as Refugio[]);
-        const locs = (locRes.data ?? []) as Location[];
-        // Defense in depth: enforce minor protection on every record from the
-        // view before it touches state or the cache (CLAUDE.md §2).
-        const pats = ((patRes.data ?? []) as PatientPublic[]).map(protectMinor);
-        setLocations(locs);
-        setPatients(pats);
-        if (dons) setDonations(dons);
-        if (resc) setRescatados(resc);
-        if (refs) setRefugios(refs);
-        setStale(false);
-        try {
-          const cached = JSON.stringify({ locations: locs, patients: pats, donations: dons ?? donations, rescatados: resc ?? rescatados, refugios: refs ?? refugios });
-          localStorage.setItem(CACHE_KEY, cached);
-        } catch {
-          /* storage full — non-fatal */
-        }
-      } catch {
-        // Offline / failed: keep showing cached data and flag it as possibly stale.
-        if (!cancelled) setStale(hadCache);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ---- Map setup ---------------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-    loadLeaflet()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then((L: any) => {
-        if (cancelled || !containerRef.current || mapRef.current) return;
-        const map = L.map(containerRef.current, {
-          zoomControl: false,
-          attributionControl: true,
-          minZoom: 7,
-          maxZoom: 17,
-          zoomAnimation: false,
-          fadeAnimation: false,
-          markerZoomAnimation: false,
-        });
-        // Zoom 9 frames the whole affected corridor (Yaracuy → Barlovento) so
-        // the damage layer reads as a regional event, not just Caracas.
-        map.setView([10.45, -67.2], 9, { animate: false });
-        mapRef.current = map;
-
-        const style = mapLabels !== false ? "light_all" : "light_nolabels";
-        tileLayerRef.current = L.tileLayer(
-          "https://{s}.basemaps.cartocdn.com/" + style + "/{z}/{x}/{y}{r}.png",
-          { attribution: "© OpenStreetMap © CARTO", subdomains: "abcd", maxZoom: 19 },
-        ).addTo(map);
-
-        map.attributionControl.setPrefix("");
-
-        // Load the clustering plugin, then create the cluster group BEFORE marking the map
-        // ready — so the marker effect always finds it. Non-fatal: if the plugin CDN fails,
-        // clusterRef stays null and markers are added to the map directly (un-clustered).
-        loadLeafletCluster()
-          .catch(() => L)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .then((Lc: any) => {
-            if (cancelled || !mapRef.current) return;
-            if (Lc?.markerClusterGroup) {
-              // Build one cluster group per type so hospitals cluster only with hospitals,
-              // refugios with refugios, etc. Each renders a type-tinted location pin.
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const groups: Record<string, any> = {};
-              (Object.keys(TYPE_META) as LocationType[]).forEach((ty) => {
-                const grp = Lc.markerClusterGroup({
-                  maxClusterRadius: 80, // px: merge aggressively so a metro shows ~1 pin per type, not a pile
-                  showCoverageOnHover: false, // no purple hull polygon — noisy on mobile
-                  spiderfyOnMaxZoom: true, // spread markers sharing (nearly) identical coords
-                  disableClusteringAtZoom: 16, // street level: always show every pin
-                  zoomToBoundsOnClick: true, // tapping a cluster zooms into its pins
-                  chunkedLoading: true,
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  iconCreateFunction: (cluster: any) =>
-                    Lc.divIcon({
-                      className: "mkwrap",
-                      html: clusterPinHtml(ty, cluster.getChildCount()),
-                      iconSize: [28, 37],
-                      iconAnchor: [14, 37], // tip of the pin
-                    }),
-                });
-                map.addLayer(grp);
-                groups[ty] = grp;
-              });
-              clusterRef.current = groups;
-            }
-          })
-          .finally(() => {
-            if (cancelled) return;
-            setMapReady(true);
-            setTimeout(() => map.invalidateSize(), 220);
-          });
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-        markersRef.current = {};
-        clusterRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const onMarker = useCallback(
     (id: string) => {
@@ -695,253 +455,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         if (l) mapRef.current.panTo([l.lat, l.lng], { animate: false });
       }
     },
-    [locationSel, locById],
+    [locationSel, locById, mapRef],
   );
-  const onMarkerRef = useRef(onMarker);
   useEffect(() => {
     onMarkerRef.current = onMarker;
   }, [onMarker]);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mkIcon = (L: any, count: number | string, color: string, active: boolean, dim: boolean, type: LocationType) =>
-    L.divIcon({
-      className: "mkwrap",
-      html:
-        '<div class="mk' +
-        (active ? " mk-on" : "") +
-        (dim ? " mk-dim" : "") +
-        '"><span class="mkico" style="color:' +
-        color +
-        '">' +
-        TYPE_ICON_SVG[type] +
-        '</span><span class="mkn mono">' +
-        count +
-        "</span></div>",
-      iconSize: [48, 26],
-      iconAnchor: [24, 26],
-    });
-
-  // Create / remove / move markers when locations change. Each marker lives in its type's
-  // cluster group (so dense areas collapse into one per-type badge); if the cluster plugin
-  // failed to load, `groups` is null and pins are added to the map directly (un-clustered).
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !window.L) return;
-    const L = window.L;
-    const map = mapRef.current;
-    const groups = clusterRef.current;
-    const markers = markersRef.current;
-    const ids = new Set(mapLocations.map((l) => l.location_id));
-    Object.keys(markers).forEach((id) => {
-      if (!ids.has(id)) {
-        const m = markers[id];
-        (groups ? groups[m.locType] : map).removeLayer(m);
-        delete markers[id];
-      }
-    });
-    mapLocations.forEach((l) => {
-      if (!markers[l.location_id]) {
-        const m = L.marker([l.lat, l.lng], { icon: mkIcon(L, 0, TYPE_META[l.type].color, false, false, l.type) });
-        m.locType = l.type; // remembered so we can remove it from the right per-type group
-        // Hospitals get their name pinned beside the marker (always-on, not hover-only) —
-        // they're the pin type people most need to identify at a glance among many pins.
-        if (l.type === "hospital") {
-          m.bindTooltip(l.canonical_name, {
-            permanent: true,
-            direction: "right",
-            offset: [10, -13],
-            className: "mklabel",
-            opacity: 1,
-          });
-        }
-        m.on("click", () => onMarkerRef.current(l.location_id));
-        (groups ? groups[l.type] : map).addLayer(m);
-        markers[l.location_id] = m;
-      } else {
-        markers[l.location_id].setLatLng([l.lat, l.lng]);
-      }
-    });
-  }, [mapReady, mapLocations]);
-
-  // Draggable draft pin for the center being placed. Shows whenever we're editing a
-  // center and have coordinates (from geocode, paste, or a map tap). Dragging it updates
-  // the lat/lng — the free way to fine-tune a location without any paid geocoder.
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !window.L) return;
-    const L = window.L;
-    const map = mapRef.current;
-    const lat = parseFloat(draft?.lat || "");
-    const lng = parseFloat(draft?.lng || "");
-    const show = editType === "center" && isFinite(lat) && isFinite(lng);
-    if (!show) {
-      if (draftMarkerRef.current) {
-        map.removeLayer(draftMarkerRef.current);
-        draftMarkerRef.current = null;
-      }
-      return;
-    }
-    if (!draftMarkerRef.current) {
-      const icon = L.divIcon({ className: "mkwrap", html: '<div class="draftpin"></div>', iconSize: [26, 26], iconAnchor: [13, 13] });
-      const m = L.marker([lat, lng], { draggable: true, zIndexOffset: 2000, icon }).addTo(map);
-      m.on("dragend", () => {
-        const p = m.getLatLng();
-        setDraft((d) => ({ ...(d || {}), lat: p.lat.toFixed(6), lng: p.lng.toFixed(6) }));
-      });
-      draftMarkerRef.current = m;
-    } else {
-      draftMarkerRef.current.setLatLng([lat, lng]);
-    }
-  }, [mapReady, editType, draft?.lat, draft?.lng]);
-
-  // "Ubicar tocando el mapa": while active, a tap on the map sets the draft coordinates.
-  // The panel is hidden (CSS) and a floating banner guides the tap, so it works on mobile
-  // where the overlay covers the whole map.
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !window.L) return;
-    const map = mapRef.current;
-    if (!pickingOnMap || editType !== "center") return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const onClick = (e: any) => {
-      const { lat, lng } = e.latlng;
-      setDraft((d) => ({ ...(d || {}), lat: lat.toFixed(6), lng: lng.toFixed(6) }));
-    };
-    map.on("click", onClick);
-    const container = map.getContainer();
-    container.style.cursor = "crosshair";
-    return () => {
-      map.off("click", onClick);
-      container.style.cursor = "";
-    };
-  }, [mapReady, pickingOnMap, editType]);
 
   // Leaving the center form ends map-pick mode (avoids a stuck crosshair / hidden panel).
   useEffect(() => {
     if (editType !== "center" && pickingOnMap) setPickingOnMap(false);
   }, [editType, pickingOnMap]);
-
-  // Update marker icons when filters/data change.
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !window.L) return;
-    const markers = markersRef.current;
-    const L = window.L;
-    mapLocations.forEach((l) => {
-      const m = markers[l.location_id];
-      if (!m) return;
-      const all = patients.filter((p) => p.location_id === l.location_id);
-      const vis = all.filter((p) => tsMatch(p));
-      const active = locationSel === l.location_id || focusId === l.location_id;
-      // A refugio (AcopioVE) is an info/needs point, not a patient tracker. With no
-      // patients it must NOT dim or show a bare "0" (that reads as "nobody / closed");
-      // show a heart glyph so it stays a live "help point". A center that ALSO carries
-      // merged refugio needs keeps its patient count (it's a real center first).
-      const isRefugio = !!refugioById[l.location_id];
-      // Info points (no patient tracking: comedor, donation_centre) and refugios must NOT
-      // dim or show a bare "0" (that reads as "closed / nobody"); they stay live "help points".
-      const isInfoPoint = !TYPE_META[l.type].hasPatients || isRefugio;
-      const dim = vis.length === 0 && !isInfoPoint;
-      // Pin color reflects the location TYPE (hospital/shelter/comedor/morgue/acopio), not the
-      // worst patient status — so the count badge reads as data, not as a death toll.
-      const color = TYPE_META[l.type].color;
-      const label = vis.length > 0 ? vis.length : isInfoPoint ? "&#9829;" : 0;
-      m.setIcon(mkIcon(L, label, color, active, dim, l.type));
-      m.setZIndexOffset(active ? 1000 : dim ? -100 : 0);
-    });
-  }, [mapReady, mapLocations, patients, tsMatch, locationSel, focusId, refugioById]);
-
-  // "Mi ubicación" marker: a blue dot (+ pulse) at the visitor's own GPS position, plus a
-  // translucent circle for the accuracy radius — the same "you are here" convention as
-  // Google/Apple Maps. Not a location pin (not clickable, no sheet), purely orientation.
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !window.L || !myLoc) return;
-    const L = window.L;
-    const map = mapRef.current;
-    const pos: [number, number] = [myLoc.lat, myLoc.lng];
-    if (!myLocMarkerRef.current) {
-      const icon = L.divIcon({
-        className: "mkwrap",
-        html: '<div class="meloc"><span class="meloc-pulse"></span><span class="meloc-dot"></span></div>',
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-      });
-      myLocMarkerRef.current = L.marker(pos, { icon, zIndexOffset: 2000, interactive: false, keyboard: false }).addTo(map);
-      myLocCircleRef.current = L.circle(pos, {
-        radius: myLoc.accuracy,
-        color: "#1a73e8",
-        weight: 1,
-        fillColor: "#1a73e8",
-        fillOpacity: 0.12,
-        interactive: false,
-      }).addTo(map);
-    } else {
-      myLocMarkerRef.current.setLatLng(pos);
-      myLocCircleRef.current.setLatLng(pos);
-      myLocCircleRef.current.setRadius(myLoc.accuracy);
-    }
-  }, [mapReady, myLoc]);
-
-  // ---- Damage data: live from USGS FDSN, seed fallback (see usgsQuake.ts) ----
-  useEffect(() => {
-    const ac = new AbortController();
-    fetchDamageData(ac.signal).then(setDamage).catch(() => {});
-    return () => ac.abort();
-  }, []);
-
-  // ---- Damage heat + aftershocks overlay (CLAUDE.md urgency emphasis) ----
-  // Lives in Leaflet's overlayPane (below markerPane), so center pins stay
-  // tappable on top of the heat.
-  useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
-    const map = mapRef.current;
-    const clear = () => {
-      if (heatRef.current) {
-        map.removeLayer(heatRef.current);
-        heatRef.current = null;
-      }
-      if (quakeLayerRef.current) {
-        map.removeLayer(quakeLayerRef.current);
-        quakeLayerRef.current = null;
-      }
-    };
-    if (!showHeat) {
-      clear();
-      return;
-    }
-    let cancelled = false;
-    loadLeafletHeat()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then((L: any) => {
-        if (cancelled || !mapRef.current || !L?.heatLayer) return;
-        clear();
-        heatRef.current = L.heatLayer(damage.points, {
-          radius: 42,
-          blur: 34,
-          minOpacity: 0.22,
-          max: 1.0,
-          maxZoom: 12, // keep the area readable as you zoom in
-          gradient: { 0.2: "#fde68a", 0.4: "#fbbf24", 0.6: "#f97316", 0.8: "#ef4444", 1.0: "#b91c1c" },
-        }).addTo(map);
-        // Aftershock epicentres as small red markers (USGS only).
-        if (damage.aftershocks.length) {
-          const grp = L.layerGroup();
-          damage.aftershocks.forEach((a) => {
-            L.circleMarker([a.lat, a.lng], {
-              radius: Math.max(4, Math.min(13, a.mag * 1.7)),
-              color: "#b91c1c",
-              weight: 1.4,
-              fillColor: "#ef4444",
-              fillOpacity: 0.45,
-            })
-              .bindTooltip(`M${a.mag.toFixed(1)} · ${a.place}`, { direction: "top" })
-              .addTo(grp);
-          });
-          grp.addTo(map);
-          quakeLayerRef.current = grp;
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [mapReady, showHeat, damage]);
 
   // ---- Derived list ------------------------------------------------------
   const list = useMemo(
@@ -997,28 +520,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // ---- Contribute photo/info to THIS record (public → moderation queue) -------
   // Form state lives in ContributeView; opening just switches the view (fresh on mount).
   const openContribute = () => setView("contribute");
-  const loadContributions = useCallback(async () => {
-    try {
-      const res = await fetch("/api/contributions");
-      if (!res.ok) return;
-      const j = await res.json();
-      setContribs(Array.isArray(j.contributions) ? j.contributions : []);
-    } catch {
-      /* offline / non-fatal */
-    }
-  }, []);
-  // Staff-only: pending missing-person reports (the public "Reportar" queue). GET is
-  // staff-gated; tolerates the table not existing yet (pre db/missing_reports.sql).
-  const loadReports = useCallback(async () => {
-    try {
-      const res = await fetch("/api/reports");
-      if (!res.ok) return;
-      const j = await res.json();
-      setReports(Array.isArray(j.reports) ? j.reports : []);
-    } catch {
-      /* offline / non-fatal */
-    }
-  }, []);
   const reviewReport = async (id: string, action: "reviewed" | "closed") => {
     try {
       const res = await fetch("/api/reports", {
@@ -1036,34 +537,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       /* non-fatal */
     }
   };
-  // Staff-only: the activity feed. RLS gates audit_log to is_staff(); tolerates the
-  // table not existing yet (pre-migration) so nothing breaks before db/audit_log.sql.
-  const loadAudit = useCallback(async () => {
-    try {
-      const { data, error } = await getSupabase()
-        .from("audit_log")
-        .select("id, created_at, actor_email, actor_role, action, entity_type, entity_id, summary")
-        .order("created_at", { ascending: false })
-        .limit(120);
-      if (!error && data) setAudit(data as AuditEntry[]);
-    } catch {
-      /* offline / table absent — non-fatal */
-    }
-  }, []);
-  // Staff-only: load the FULL rescatados base rows (admin fields included) for the
-  // admin tab. RLS gates this to is_staff(); anon never reaches the base table.
-  const loadRescAdmin = useCallback(async () => {
-    try {
-      const { data, error } = await getSupabase()
-        .from("rescatados")
-        .select("*")
-        .eq("promoted", false)
-        .order("created_at", { ascending: false });
-      if (!error && data) setRescAdmin(data as Rescatado[]);
-    } catch {
-      /* offline / non-fatal */
-    }
-  }, []);
   const reviewContribution = async (id: string, action: "approve" | "reject") => {
     // Corroboration gate: an aporte must be checked before it goes public. If the
     // target record is ALREADY verified, approving a photo publishes it INSTANTLY
@@ -1998,16 +1471,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   };
 
   // ---- Volunteer management (admin-only, via server API) -----------------
-  const loadVolunteers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/volunteers");
-      if (!res.ok) return;
-      const j = await res.json();
-      setVolunteers(Array.isArray(j.volunteers) ? j.volunteers : []);
-    } catch {
-      /* offline / non-fatal */
-    }
-  }, []);
   const genPass = () =>
     setVolPass(Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6).toUpperCase() + "9!");
   const createVolunteer = async () => {
@@ -2052,49 +1515,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       /* non-fatal */
     }
   };
-  // Admin: pending volunteer applications + approve/reject.
-  const loadVolRequests = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/volunteers?requests=1");
-      if (!res.ok) return;
-      const j = await res.json();
-      setVolReqs(Array.isArray(j.requests) ? j.requests : []);
-    } catch {
-      /* offline / non-fatal */
-    }
-  }, []);
-  // Preload the "needs attention" counts as soon as a staff session resolves, so the
-  // gear badge is accurate before the panel is even opened. Admin also gets the pending
-  // volunteer applications; volunteers only see the aportes count.
-  useEffect(() => {
-    if (!(isAdmin || isVolunteer)) return;
-    loadContributions();
-    loadReports();
-    loadAudit();
-    if (isAdmin) loadVolRequests();
-  }, [isAdmin, isVolunteer, loadContributions, loadReports, loadAudit, loadVolRequests]);
-  // Light auto-refresh (no realtime backend yet — CLAUDE.md §"Novedades" pending). While a
-  // staff session is active we re-pull the cheap "needs attention" counts every 60s so the
-  // gear badge stays live even before the panel is opened; the heavier 120-row audit feed is
-  // only re-pulled while the admin panel is actually open. Skipped when the tab is hidden to
-  // save the flaky-3G data budget (§6); a fresh pull also runs on becoming visible again.
-  useEffect(() => {
-    if (!(isAdmin || isVolunteer)) return;
-    const tick = () => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      loadContributions();
-      loadReports();
-      if (isAdmin) loadVolRequests();
-      if (view === "admin") loadAudit();
-    };
-    const id = window.setInterval(tick, 60_000);
-    const onVis = () => { if (!document.hidden) tick(); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.clearInterval(id);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, [isAdmin, isVolunteer, view, loadContributions, loadReports, loadVolRequests, loadAudit]);
   const reviewVolRequest = async (id: string, action: "approve" | "reject") => {
     try {
       const res = await fetch("/api/admin/volunteers", {
@@ -2912,1159 +2332,31 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       )}
 
       {view === "admin" && (
-        <div className={"overlay" + (pickingOnMap ? " overlay-pick" : "")}>
-          <div className="ovhead">
-            <button
-              className="oicon"
-              onClick={() => {
-                setView(null);
-                clearEdit();
-              }}
-            >
-              {ICON.back}
-            </button>
-            <span className="ohtitle">{t.adminTitle}</span>
-            {user && (
-              <button className="staff-guide" onClick={openStaffTour} aria-label={t.staffGuide} title={t.staffGuide}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M9.5 9.5a2.5 2.5 0 0 1 4.5 1.5c0 1.7-2.5 2-2.5 3.5" />
-                  <path d="M12 17.5h.01" />
-                </svg>
-              </button>
-            )}
-            {user && (
-              <button className="signout" onClick={signOut}>
-                {t.signOut}
-              </button>
-            )}
-          </div>
-
-          {!user ? (
-            <div className="loginwrap">
-              {recoverMode ? (
-                <form className="form" onSubmit={sendRecovery}>
-                  <p className="recintro">{t.recoverHint}</p>
-                  {recoverSent ? (
-                    <div className="lok">{t.recoverSent}</div>
-                  ) : (
-                    <>
-                      <div className="fld">
-                        <span className="flabel">{t.email}</span>
-                        <input
-                          className="finput"
-                          type="email"
-                          autoComplete="username"
-                          value={loginEmail}
-                          onChange={(e) => setLoginEmail(e.target.value)}
-                          placeholder="tucorreo@helpmapvzla.net"
-                        />
-                      </div>
-                      <button className="btnp" type="submit" disabled={loginBusy || !loginEmail}>
-                        {loginBusy ? "…" : t.sendLink}
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className="linkbtn"
-                    onClick={() => {
-                      setRecoverMode(false);
-                      setRecoverSent(false);
-                      setLoginErr("");
-                    }}
-                  >
-                    {t.backToLogin}
-                  </button>
-                </form>
-              ) : (
-                <>
-                  <form className="form" onSubmit={signIn}>
-                    <div className="fld">
-                      <span className="flabel">{t.email}</span>
-                      <input
-                        className="finput"
-                        type="email"
-                        autoComplete="username"
-                        value={loginEmail}
-                        onChange={(e) => setLoginEmail(e.target.value)}
-                        placeholder="admin@helpmapvzla.net"
-                      />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.password}</span>
-                      <input
-                        className="finput"
-                        type="password"
-                        autoComplete="current-password"
-                        value={loginPass}
-                        onChange={(e) => setLoginPass(e.target.value)}
-                        placeholder="••••••••"
-                      />
-                    </div>
-                    {loginErr && <span className="lerr">{loginErr}</span>}
-                    <button className="btnp" type="submit" disabled={loginBusy}>
-                      {loginBusy ? "…" : t.signIn}
-                    </button>
-                    <button
-                      type="button"
-                      className="linkbtn"
-                      onClick={() => {
-                        setRecoverMode(true);
-                        setLoginErr("");
-                      }}
-                    >
-                      {t.forgotPass}
-                    </button>
-                  </form>
-                  <div className="loginhint">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="4" y="11" width="16" height="9" rx="2" />
-                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-                    </svg>
-                    {t.loginHint}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <>
-              {!editType && (
-                <div className="admtabs">
-                  <button
-                    className={"atab " + (adminTab === "novedades" ? "atab-on" : "")}
-                    onClick={() => {
-                      switchTab("novedades");
-                      loadAudit();
-                      loadContributions();
-                      if (isAdmin) loadVolRequests();
-                    }}
-                  >
-                    {t.tabNews}
-                    {contribs.length + volReqs.length + reports.length > 0 && (
-                      <span className="atab-badge">{contribs.length + volReqs.length + reports.length}</span>
-                    )}
-                  </button>
-                  <button
-                    className={"atab " + (adminTab === "centros" ? "atab-on" : "")}
-                    onClick={() => switchTab("centros")}
-                  >
-                    {t.tabCenters}
-                  </button>
-                  <button
-                    className={"atab " + (adminTab === "personas" ? "atab-on" : "")}
-                    onClick={() => switchTab("personas")}
-                  >
-                    {t.tabPeople}
-                  </button>
-                  <button
-                    className={"atab " + (adminTab === "listas" ? "atab-on" : "")}
-                    onClick={() => switchTab("listas")}
-                  >
-                    {t.tabLists}
-                  </button>
-                  <button
-                    className={"atab " + (adminTab === "rescatados" ? "atab-on" : "")}
-                    onClick={() => {
-                      switchTab("rescatados");
-                      loadRescAdmin();
-                    }}
-                  >
-                    {t.tabRescued}
-                  </button>
-                  <button
-                    className={"atab " + (adminTab === "reportes" ? "atab-on" : "")}
-                    onClick={() => {
-                      switchTab("reportes");
-                      loadReports();
-                    }}
-                  >
-                    {t.tabReports}
-                    {reports.length > 0 && <span className="atab-badge">{reports.length}</span>}
-                  </button>
-                  <button
-                    className={"atab " + (adminTab === "donaciones" ? "atab-on" : "")}
-                    onClick={() => switchTab("donaciones")}
-                  >
-                    {t.tabDonations}
-                  </button>
-                  {isAdmin && (
-                    <button
-                      className={"atab " + (adminTab === "voluntarios" ? "atab-on" : "")}
-                      onClick={() => {
-                        switchTab("voluntarios");
-                        loadVolunteers();
-                        loadVolRequests();
-                      }}
-                    >
-                      {t.tabVolunteers}
-                    </button>
-                  )}
-                </div>
-              )}
-              <div className="ovbody">
-                {/* Maintenance toggle — admin only, shown on every tab (high-impact,
-                    same gate as deletes). Flips the public site-wide banner. */}
-                {isAdmin && !editType && (
-                  <div className={"maint-toggle" + (maintenance ? " maint-toggle-on" : "")}>
-                    <div className="maint-toggle-txt">
-                      <div className="maint-toggle-title">
-                        {t.maintTitle}
-                        <span className={"maint-pill" + (maintenance ? " maint-pill-on" : "")}>
-                          {maintenance ? t.maintActive : t.maintInactive}
-                        </span>
-                      </div>
-                      <div className="maint-toggle-hint">{t.maintHint}</div>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={maintenance}
-                      className={"switch" + (maintenance ? " switch-on" : "")}
-                      onClick={toggleMaintenance}
-                      disabled={maintBusy}
-                      aria-label={t.maintTitle}
-                    >
-                      <span className="switch-knob" />
-                    </button>
-                  </div>
-                )}
-                <div className="note" style={{ marginBottom: 14 }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 11v5M12 8h.01" />
-                  </svg>
-                  {isAdmin ? t.adminLocalNote : t.volReviewNote}
-                </div>
-
-                {adminTab === "novedades" && !editType && (
-                  <div className="feed">
-                    {(contribs.length > 0 || reports.length > 0 || (isAdmin && volReqs.length > 0)) && (
-                      <div className="feed-pending">
-                        {contribs.length > 0 && (
-                          <button className="feed-pill" onClick={() => switchTab("personas")}>
-                            {t.newsPendingContribs.replace("{n}", String(contribs.length))}
-                          </button>
-                        )}
-                        {reports.length > 0 && (
-                          <button
-                            className="feed-pill"
-                            onClick={() => {
-                              switchTab("reportes");
-                              loadReports();
-                            }}
-                          >
-                            {t.newsPendingReports.replace("{n}", String(reports.length))}
-                          </button>
-                        )}
-                        {isAdmin && volReqs.length > 0 && (
-                          <button
-                            className="feed-pill"
-                            onClick={() => {
-                              switchTab("voluntarios");
-                              loadVolRequests();
-                            }}
-                          >
-                            {t.newsPendingVols.replace("{n}", String(volReqs.length))}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <button
-                      className="addbtn"
-                      onClick={() => {
-                        // Refresh EVERYTHING the panel shows, not just the feed: the
-                        // pending-aportes / volunteer-request counts drive the badge and
-                        // the pills above, so refreshing only the audit list would leave
-                        // them stale (looks like "nothing updated").
-                        loadAudit();
-                        loadContributions();
-                        loadReports();
-                        if (isAdmin) loadVolRequests();
-                      }}
-                    >
-                      {t.newsRefresh}
-                    </button>
-                    {audit.length === 0 ? (
-                      <div className="empty">{t.newsEmpty}</div>
-                    ) : (
-                      <ul className="feed-list">
-                        {audit.map((a) => (
-                          <li key={a.id} className={"feed-item feed-" + a.entity_type}>
-                            <div className="feed-main">
-                              <span className="feed-action">{AUDIT_LABEL[a.action]?.[lang] ?? a.action}</span>
-                              {a.summary && <span className="feed-sum">{a.summary}</span>}
-                            </div>
-                            <div className="feed-meta">
-                              <span>{a.actor_email ?? (a.action === "contribution_new" || a.action === "volunteer_apply" ? t.newsPublic : t.newsSystem)}</span>
-                              <span className="feed-dot">·</span>
-                              <span>{timeAgo(a.created_at, lang)}</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                {adminTab === "centros" && !editType && (
-                  <div>
-                    <button className="addbtn" onClick={newCenter}>
-                      {ICON.plus}
-                      {t.addCenter}
-                    </button>
-                    {admSearchBar}
-                    {(() => {
-                      const rows = locations.filter((l) =>
-                        admHit(l.canonical_name + " " + (l.municipality ?? "") + " " + STATE_LABEL[l.state] + " " + TYPE_META[l.type][lang]),
-                      );
-                      if (rows.length === 0)
-                        return <div className="asub" style={{ padding: "8px 2px" }}>{admQ ? t.admSearchNone : t.noResults}</div>;
-                      return rows.map((l) => (
-                      <div className="arow" key={l.location_id}>
-                        <div className="ai">
-                          <div className="aname">{l.canonical_name}</div>
-                          <div className="asub">
-                            {STATE_LABEL[l.state] + " · " + (l.municipality ?? "—") + " · " + TYPE_META[l.type][lang]}
-                          </div>
-                        </div>
-                        <div className="aacts">
-                          <span className="acount">
-                            {patients.filter((p) => p.location_id === l.location_id).length + " " + t.records}
-                          </span>
-                          <button className="amini" onClick={() => editCenter(l)}>
-                            {ICON.edit}
-                          </button>
-                          {isAdmin && (
-                            <button className="amini del" onClick={() => deleteCenter(l.location_id)}>
-                              {ICON.trash}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      ));
-                    })()}
-                  </div>
-                )}
-
-                {adminTab === "donaciones" && !editType && (
-                  <div>
-                    <button className="addbtn" onClick={newDonation}>
-                      {ICON.plus}
-                      {t.addDonation}
-                    </button>
-                    {admSearchBar}
-                    {donations.length === 0 && <div className="asub" style={{ padding: "8px 2px" }}>{t.donNone}</div>}
-                    {donations
-                      .filter((d) => admHit(d.name + " " + (d.description ?? "")))
-                      .map((d) => (
-                      <div className="arow" key={d.id}>
-                        <div className="ai">
-                          <div className="aname">{d.name}</div>
-                          {d.description && <div className="asub">{d.description}</div>}
-                        </div>
-                        <div className="aacts">
-                          <button className="amini" onClick={() => editDonation(d)}>
-                            {ICON.edit}
-                          </button>
-                          {isAdmin && (
-                            <button className="amini del" onClick={() => deleteDonation(d.id)}>
-                              {ICON.trash}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {adminTab === "personas" && !editType && (
-                  <div>
-                    <button className="addbtn" onClick={newPerson}>
-                      {ICON.plus}
-                      {t.addPerson}
-                    </button>
-                    {admSearchBar}
-                    {patients.filter((p) => admHit(p.nombres + " " + p.apellidos + " " + p.ci_display + " " + p.location_name)).length === 0 && (
-                      <div className="asub" style={{ padding: "8px 2px" }}>{admQ ? t.admSearchNone : t.noResults}</div>
-                    )}
-                    {patients
-                      .filter((p) => admHit(p.nombres + " " + p.apellidos + " " + p.ci_display + " " + p.location_name))
-                      .map((p) => {
-                      const nAportes = contribs.filter((c) => c.patient_id === p.id).length;
-                      return (
-                      <div className={"arow " + SM[p.estatus].cls} key={p.id}>
-                        <div className="ai">
-                          <div className="aname">{p.nombres + " " + p.apellidos}</div>
-                          <div className="asub">{p.location_name}</div>
-                        </div>
-                        <div className="aacts">
-                          {nAportes > 0 && (
-                            <span className="abadge" style={{ background: "#fde68a", color: "#92400e" }} title={t.tabContribs}>
-                              {nAportes} ⬆
-                            </span>
-                          )}
-                          <span className="abadge">{SM[p.estatus][lang]}</span>
-                          <button className="amini" onClick={() => editPerson(p)}>
-                            {ICON.edit}
-                          </button>
-                          {isAdmin && (
-                            <button className="amini del" onClick={() => deletePerson(p.id)}>
-                              {ICON.trash}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {adminTab === "rescatados" && !editType && (
-                  <div>
-                    <div className="note" style={{ marginBottom: 12 }}>
-                      <span className="resc-ic">{ICON.rescue}</span>
-                      {t.rescuedReviewNote}
-                    </div>
-                    <button className="addbtn" onClick={newRescatado}>
-                      {ICON.plus}
-                      {t.addRescued}
-                    </button>
-                    {admSearchBar}
-                    {rescAdmin.filter((r) => admHit(r.nombres + " " + r.apellidos + " " + (r.ci ?? "") + " " + (r.rescue_site ?? ""))).length === 0 && (
-                      <div className="asub" style={{ padding: "8px 2px" }}>{admQ ? t.admSearchNone : t.rescuedNone}</div>
-                    )}
-                    {rescAdmin
-                      .filter((r) => admHit(r.nombres + " " + r.apellidos + " " + (r.ci ?? "") + " " + (r.rescue_site ?? "")))
-                      .map((r) => (
-                      <div className="arow st-resc" key={r.id}>
-                        <div className="ai">
-                          <div className="aname">{(r.nombres + " " + r.apellidos).trim() || "—"}</div>
-                          <div className="asub">
-                            {[
-                              r.edad != null ? r.edad + " " + t.yrs : null,
-                              r.sexo === "M" ? t.male : r.sexo === "F" ? t.female : null,
-                              r.rescue_site,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ") || t.rescuedStatus}
-                          </div>
-                        </div>
-                        <div className="aacts">
-                          <button className="amini resc-promote" title={t.promote} onClick={() => startPromote(r)}>
-                            {ICON.pin}
-                          </button>
-                          <button className="amini" onClick={() => editRescatado(r)}>
-                            {ICON.edit}
-                          </button>
-                          {isAdmin && (
-                            <button className="amini del" onClick={() => deleteRescatado(r.id)}>
-                              {ICON.trash}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {adminTab === "reportes" && !editType && (
-                  <div>
-                    <div className="note" style={{ marginBottom: 12 }}>
-                      <span className="resc-ic">{ICON.search}</span>
-                      {t.rmIntro}
-                    </div>
-                    {reports.length === 0 && (
-                      <div className="asub" style={{ padding: "8px 2px" }}>{t.reportsNone}</div>
-                    )}
-                    {reports.map((r) => (
-                      <div className="arow" key={r.id}>
-                        <div className="ai">
-                          <div className="aname">{(r.nombres + " " + r.apellidos).trim() || "—"}</div>
-                          <div className="asub">
-                            {[
-                              r.ci ? r.ci : null,
-                              r.edad != null ? r.edad + " " + t.yrs : null,
-                              r.zona ? t.reportZonaLabel + ": " + r.zona : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </div>
-                          {r.descripcion && <div className="asub" style={{ marginTop: 3 }}>{r.descripcion}</div>}
-                          <div className="asub" style={{ marginTop: 3 }}>
-                            {t.reportReporter}: {r.reporter_name || "—"}
-                            {r.reporter_contact ? " · " + r.reporter_contact : ""}
-                            {" · " + timeAgo(r.created_at, lang)}
-                          </div>
-                        </div>
-                        <div className="aacts">
-                          <button className="amini" title={t.reportMarkReviewed} onClick={() => reviewReport(r.id, "reviewed")}>
-                            {ICON.check}
-                          </button>
-                          <button className="amini del" title={t.reportCloseAction} onClick={() => reviewReport(r.id, "closed")}>
-                            {ICON.trash}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {adminTab === "listas" && !editType && (
-                  <div className="form">
-                    <div className="note" style={{ marginBottom: 4 }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="4" width="18" height="16" rx="2" />
-                        <path d="M7 9h10M7 13h10M7 17h6" />
-                      </svg>
-                      {t.listHint}
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_ubic}</span>
-                      <select className="fselect" value={listLoc} onChange={(e) => setListLoc(e.target.value)}>
-                        <option value="">{t.selectHosp}</option>
-                        {locations.map((l) => (
-                          <option key={l.location_id} value={l.location_id}>
-                            {l.canonical_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.listDate}</span>
-                      <input
-                        className="finput"
-                        type="date"
-                        max={todayISO}
-                        value={listDate}
-                        onChange={(e) => setListDate(e.target.value)}
-                      />
-                      <span className="fhint">{t.listDateHint}</span>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.listNote}</span>
-                      <input className="finput" value={listNote} onChange={(e) => setListNote(e.target.value)} placeholder={t.listNote} />
-                    </div>
-                    <label className="upload">
-                      <input type="file" accept="image/*" multiple onChange={onPickList} style={{ display: "none" }} disabled={listBusy} />
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 16V4M8 8l4-4 4 4" />
-                        <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-                      </svg>
-                      {listBusy
-                        ? listProgress && listProgress.total > 1
-                          ? `${t.listSending} ${listProgress.done}/${listProgress.total}`
-                          : t.listSending
-                        : t.listPick}
-                    </label>
-                    {listBusy && (
-                      <div className="list-progress" role="status" aria-live="polite">
-                        <span className="spin" />
-                        {listProgress && listProgress.total > 1
-                          ? `${t.listSending} ${listProgress.done}/${listProgress.total}`
-                          : t.listSending}
-                      </div>
-                    )}
-                    {!listBusy && listResult && (
-                      <div className={"list-result list-result-" + listResult.kind} role="status" aria-live="polite">
-                        {listResult.kind === "ok" ? (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M20 6 9 17l-5-5" />
-                          </svg>
-                        ) : (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 8v5M12 16.5v.5" />
-                            <circle cx="12" cy="12" r="9" />
-                          </svg>
-                        )}
-                        <span>{listResult.msg}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {adminTab === "voluntarios" && isAdmin && !editType && (
-                  <div className="form">
-                    {/* Pending public applications — approve to provision the account. */}
-                    <div className="fld">
-                      <span className="flabel">{t.volRequests}</span>
-                      <span className="fhint">{t.volReqReviewNote}</span>
-                      {volReqs.length === 0 && <div className="asub" style={{ padding: "6px 2px" }}>{t.volReqNone}</div>}
-                      {volReqs.map((rq) => (
-                        <div className="volreq" key={rq.id}>
-                          <div className="volreq-head">
-                            <span className="volreq-name">{rq.nombre || rq.email}</span>
-                            {rq.perfil && (
-                              <span className="volreq-badge">
-                                {VOL_PROFILES.find((pf) => pf.value === rq.perfil)?.[lang] ?? rq.perfil}
-                              </span>
-                            )}
-                          </div>
-                          <div className="volreq-meta">
-                            <span>{ICON.mail}{rq.email}</span>
-                            {rq.telefono && <span>{ICON.phone}{rq.telefono}</span>}
-                            <span className="volreq-date">
-                              {new Date(rq.created_at).toLocaleDateString(localeOf(lang))}
-                            </span>
-                          </div>
-                          {rq.fuentes && (
-                            <div className="volreq-why">
-                              <span className="volreq-why-label">{t.volReqWhy}</span>
-                              <p>{rq.fuentes}</p>
-                            </div>
-                          )}
-                          <div className="volreq-acts">
-                            <button className="btng volreq-reject" onClick={() => reviewVolRequest(rq.id, "reject")}>
-                              {t.volReject}
-                            </button>
-                            <button className="btnp" onClick={() => reviewVolRequest(rq.id, "approve")}>
-                              {ICON.check}
-                              {t.volApprove}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="fld" style={{ marginTop: 8 }}>
-                      <span className="flabel">{t.email}</span>
-                      <input
-                        className="finput"
-                        type="email"
-                        autoComplete="off"
-                        value={volEmail}
-                        onChange={(e) => setVolEmail(e.target.value)}
-                        placeholder="voluntario@correo.com"
-                      />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.volPass}</span>
-                      <div className="frow" style={{ alignItems: "stretch" }}>
-                        <input
-                          className="finput mono"
-                          value={volPass}
-                          onChange={(e) => setVolPass(e.target.value)}
-                          placeholder="••••••"
-                        />
-                        <button type="button" className="btng" style={{ flex: "0 0 auto" }} onClick={genPass}>
-                          {t.volGenerate}
-                        </button>
-                      </div>
-                    </div>
-                    <button className="btnp" onClick={createVolunteer} disabled={volBusy}>
-                      {ICON.plus}
-                      {volBusy ? "…" : t.volCreate}
-                    </button>
-
-                    <div style={{ marginTop: 16 }}>
-                      {volunteers.length === 0 && <div className="empty">{t.volNone}</div>}
-                      {volunteers.map((v) => (
-                        <div className="arow" key={v.user_id}>
-                          <div className="ai">
-                            <div className="aname">{v.email}</div>
-                            <div className="asub">{t.tabVolunteers}</div>
-                          </div>
-                          <div className="aacts">
-                            <button className="amini del" onClick={() => revokeVolunteer(v.user_id)}>
-                              {ICON.trash}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {editType === "center" && (
-                  <div className="form">
-                    <div className="fld">
-                      <span className="flabel">{t.f_name}</span>
-                      <input className="finput" value={draft?.canonical_name || ""} onChange={setD("canonical_name")} placeholder={t.f_name} />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.type}</span>
-                      <select className="fselect" value={draft?.type || "hospital"} onChange={setD("type")}>
-                        {(Object.keys(TYPE_META) as LocationType[]).map((k) => (
-                          <option key={k} value={k}>
-                            {TYPE_META[k][lang]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_city}</span>
-                      <select className="fselect" value={draft?.state || "distrito_capital"} onChange={setD("state")}>
-                        {(Object.keys(STATE_LABEL) as VzlaState[]).map((s) => (
-                          <option key={s} value={s}>
-                            {STATE_LABEL[s]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_parish}</span>
-                      <input className="finput" value={draft?.municipality || ""} onChange={setD("municipality")} placeholder={t.f_parish} />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_address}</span>
-                      <div className="geo-row">
-                        <input
-                          className="finput"
-                          value={geoQuery}
-                          onChange={(e) => setGeoQuery(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              if (!geoBusy) geocodeAddress();
-                            }
-                          }}
-                          placeholder={draft?.canonical_name || t.f_address}
-                        />
-                        <button className="btng geo-btn" onClick={geocodeAddress} disabled={geoBusy} type="button">
-                          {geoBusy ? t.geoSearching : t.geoSearch}
-                        </button>
-                      </div>
-                      {geoResults.length > 0 ? (
-                        <div className="geo-results">
-                          <span className="fhint">{t.geoPick}</span>
-                          {geoResults.map((r, i) => (
-                            <button key={i} type="button" className="geo-res" onClick={() => pickGeoResult(r)}>
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 21s-6-5.7-6-10a6 6 0 0 1 12 0c0 4.3-6 10-6 10Z" />
-                                <circle cx="12" cy="11" r="2" />
-                              </svg>
-                              <span>{r.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="fhint">{t.geoHint}</span>
-                      )}
-                    </div>
-                    <div className="frow">
-                      <div className="fld">
-                        <span className="flabel">{t.f_lat}</span>
-                        <input className="finput mono" value={draft?.lat || ""} onChange={setD("lat")} placeholder="10.50" inputMode="decimal" />
-                      </div>
-                      <div className="fld">
-                        <span className="flabel">{t.f_lng}</span>
-                        <input className="finput mono" value={draft?.lng || ""} onChange={setD("lng")} placeholder="-66.90" inputMode="decimal" />
-                      </div>
-                    </div>
-                    <button type="button" className="btng geo-pickbtn" onClick={() => setPickingOnMap(true)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 21s-6-5.7-6-10a6 6 0 0 1 12 0c0 4.3-6 10-6 10Z" />
-                        <circle cx="12" cy="11" r="2" />
-                      </svg>
-                      {t.geoPickMap}
-                    </button>
-                    <span className="fhint">{t.geoPickHint}</span>
-                    {/* Refugio/acopio needs: for shelters AND puntos de acopio. Editable
-                        by staff so each center's differing needs stay current (AcopioVE, §14). */}
-                    {(draft?.type === "shelter" || draft?.type === "donation_centre") && (
-                      <div className="refedit">
-                        <span className="refedit-h">{t.refEditTitle}</span>
-                        <div className="fld">
-                          <span className="flabel">{t.f_refNecesita}</span>
-                          <textarea
-                            className="finput"
-                            rows={3}
-                            value={draft?.ref_necesita || ""}
-                            onChange={(e) => setDraft((d) => ({ ...(d || {}), ref_necesita: e.target.value }))}
-                            placeholder={t.f_refNecesita}
-                          />
-                          <span className="fhint">{t.f_refNecesitaHint}</span>
-                        </div>
-                        <div className="fld">
-                          <span className="flabel">{t.f_refRecibe}</span>
-                          <input
-                            className="finput"
-                            value={draft?.ref_recibe || ""}
-                            onChange={setD("ref_recibe")}
-                            placeholder="Agua, Alimentos, Medicamentos, Pañales"
-                          />
-                          <span className="fhint">{t.f_refRecibeHint}</span>
-                        </div>
-                        <div className="fld">
-                          <span className="flabel">{t.f_refHorario}</span>
-                          <input className="finput" value={draft?.ref_horario || ""} onChange={setD("ref_horario")} placeholder={t.f_refHorario} />
-                        </div>
-                        <div className="fld">
-                          <span className="flabel">{t.f_refResponsable}</span>
-                          <input className="finput" value={draft?.ref_responsable || ""} onChange={setD("ref_responsable")} placeholder={t.f_refResponsable} />
-                        </div>
-                        <div className="fld">
-                          <span className="flabel">{t.f_refAddress}</span>
-                          <input className="finput" value={draft?.ref_address || ""} onChange={setD("ref_address")} placeholder={t.f_refAddress} />
-                        </div>
-                        <div className="fld">
-                          <span className="flabel">{t.f_refAnimal}</span>
-                          <div className="seg">
-                            <button className={"segb " + (!draft?.ref_animal ? "segb-on" : "")} onClick={setDV("ref_animal", false)}>
-                              {t.no}
-                            </button>
-                            <button className={"segb " + (draft?.ref_animal ? "segb-on" : "")} onClick={setDV("ref_animal", true)}>
-                              {t.yes}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <div className="ebtns">
-                      <button className="btng" onClick={clearEdit}>
-                        {t.cancel}
-                      </button>
-                      <button className="btnp" onClick={saveCenter}>
-                        {t.save}
-                      </button>
-                    </div>
-                    {canDelete && (
-                      <button className="edel" onClick={() => editId && deleteCenter(editId)}>
-                        {t.del}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {editType === "donation" && (
-                  <div className="form">
-                    <div className="fld">
-                      <span className="flabel">{t.f_donName}</span>
-                      <input
-                        className="finput"
-                        value={draft?.don_name || ""}
-                        onChange={setD("don_name")}
-                        placeholder={t.f_donName}
-                      />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_donDesc}</span>
-                      <input
-                        className="finput"
-                        value={draft?.don_desc || ""}
-                        onChange={setD("don_desc")}
-                        placeholder={t.f_donDesc}
-                      />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_donSocial}</span>
-                      <input
-                        className="finput"
-                        type="url"
-                        inputMode="url"
-                        value={draft?.don_social || ""}
-                        onChange={setD("don_social")}
-                        placeholder="https://instagram.com/…"
-                      />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_donUrl}</span>
-                      <input
-                        className="finput"
-                        type="url"
-                        inputMode="url"
-                        value={draft?.don_url || ""}
-                        onChange={setD("don_url")}
-                        placeholder="https://…"
-                      />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_donInfo}</span>
-                      <textarea
-                        className="finput"
-                        rows={4}
-                        value={draft?.don_info || ""}
-                        onChange={(e) => setDraft((d) => ({ ...(d || {}), don_info: e.target.value }))}
-                        placeholder={t.f_donInfoHint}
-                      />
-                      <span className="fhint">{t.f_donInfoHint}</span>
-                    </div>
-                    <div className="ebtns">
-                      <button className="btng" onClick={clearEdit}>
-                        {t.cancel}
-                      </button>
-                      <button className="btnp" onClick={saveDonation}>
-                        {t.save}
-                      </button>
-                    </div>
-                    {canDelete && (
-                      <button className="edel" onClick={() => editId && deleteDonation(editId)}>
-                        {t.del}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {editType === "person" && (
-                  <div className="form">
-                    <div className="fld">
-                      <span className="flabel">{t.f_ape}</span>
-                      <input className="finput" value={draft?.apellidos || ""} onChange={setD("apellidos")} placeholder={t.f_ape} />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_nom}</span>
-                      <input className="finput" value={draft?.nombres || ""} onChange={setD("nombres")} placeholder={t.f_nom} />
-                    </div>
-                    <div className="frow">
-                      <div className="fld">
-                        <span className="flabel">{t.f_ci}</span>
-                        <input className="finput mono" value={draft?.ci || ""} onChange={setD("ci")} placeholder="V-00.000.000" />
-                      </div>
-                      <div className="fld">
-                        <span className="flabel">{t.f_edad}</span>
-                        <input className="finput" value={draft?.edad || ""} onChange={setD("edad")} placeholder="00" inputMode="numeric" />
-                      </div>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_sexo}</span>
-                      <div className="seg">
-                        <button className={"segb " + (draft?.sexo === "F" ? "segb-on" : "")} onClick={setDV("sexo", "F")}>
-                          {t.female}
-                        </button>
-                        <button className={"segb " + (draft?.sexo === "M" ? "segb-on" : "")} onClick={setDV("sexo", "M")}>
-                          {t.male}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_center}</span>
-                      <select className="fselect" value={draft?.location_id || ""} onChange={setD("location_id")}>
-                        {locations.map((l) => (
-                          <option key={l.location_id} value={l.location_id}>
-                            {l.canonical_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_status}</span>
-                      <select className="fselect" value={draft?.estatus || "INGRESADO"} onChange={setD("estatus")}>
-                        {statusOpts.map((s) => (
-                          <option key={s.v} value={s.v}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {/* Verified is the publish gate (§8): a photo / FALLECIDO only shows
-                        publicly once the record is verified. Open to all staff (admin OR
-                        volunteer) — volunteers are trusted and their access is revocable. */}
-                    {(isAdmin || isVolunteer) && (
-                      <div className="fld">
-                        <span className="flabel">{t.verified}</span>
-                        <div className="seg">
-                          <button className={"segb " + (!draft?.verified ? "segb-on" : "")} onClick={setDV("verified", false)}>
-                            {t.verifiedNo}
-                          </button>
-                          <button className={"segb " + (draft?.verified ? "segb-on" : "")} onClick={setDV("verified", true)}>
-                            {t.verifiedYes}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {/* Pending photo/info contributions for THIS person — approve/reject in place. */}
-                    {editId && contribs.some((c) => c.patient_id === editId) && (
-                      <div className="fld">
-                        <span className="flabel">{t.tabContribs}</span>
-                        <span className="fhint">{t.contribReviewNote}</span>
-                        {contribs
-                          .filter((c) => c.patient_id === editId)
-                          .map((c) => (
-                            <div className="arow" key={c.id}>
-                              {c.foto_url && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={c.foto_url} alt="" loading="lazy" decoding="async" className="upload-thumb" style={{ width: 48, height: 48, marginRight: 10 }} />
-                              )}
-                              <div className="ai">
-                                {c.descripcion && <div className="asub">{c.descripcion}</div>}
-                                {c.contacto && <div className="asub mono">{c.contacto}</div>}
-                              </div>
-                              <div className="aacts">
-                                <button className="amini" title={t.contribApprove} onClick={() => reviewContribution(c.id, "approve")}>
-                                  {ICON.check}
-                                </button>
-                                <button className="amini del" title={t.contribReject} onClick={() => reviewContribution(c.id, "reject")}>
-                                  {ICON.trash}
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                    <div className="ebtns">
-                      <button className="btng" onClick={clearEdit}>
-                        {t.cancel}
-                      </button>
-                      <button className="btnp" onClick={savePerson}>
-                        {t.save}
-                      </button>
-                    </div>
-                    {canDelete && (
-                      <button className="edel" onClick={() => editId && deletePerson(editId)}>
-                        {t.del}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {editType === "rescatado" && (
-                  <div className="form">
-                    <div className="note">
-                      <span className="resc-ic">{ICON.rescue}</span>
-                      {t.rescuedFieldNote}
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_ape}</span>
-                      <input className="finput" value={draft?.apellidos || ""} onChange={setD("apellidos")} placeholder={t.f_ape} />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_nom}</span>
-                      <input className="finput" value={draft?.nombres || ""} onChange={setD("nombres")} placeholder={t.f_nom} />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_minor}</span>
-                      <div className="seg">
-                        <button className={"segb " + (!draft?.is_minor ? "segb-on" : "")} onClick={setDV("is_minor", false)}>
-                          {t.no}
-                        </button>
-                        <button className={"segb " + (draft?.is_minor ? "segb-on" : "")} onClick={setDV("is_minor", true)}>
-                          {t.yes}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="frow">
-                      <div className="fld">
-                        <span className="flabel">{t.f_ci}</span>
-                        <input
-                          className="finput mono"
-                          value={draft?.is_minor ? "MENOR" : draft?.ci || ""}
-                          onChange={setD("ci")}
-                          placeholder="V-00.000.000"
-                          disabled={!!draft?.is_minor}
-                        />
-                      </div>
-                      <div className="fld">
-                        <span className="flabel">{t.f_edad}</span>
-                        <input className="finput" value={draft?.edad || ""} onChange={setD("edad")} placeholder="00" inputMode="numeric" />
-                      </div>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_sexo}</span>
-                      <div className="seg">
-                        <button className={"segb " + (draft?.sexo === "F" ? "segb-on" : "")} onClick={setDV("sexo", "F")}>
-                          {t.female}
-                        </button>
-                        <button className={"segb " + (draft?.sexo === "M" ? "segb-on" : "")} onClick={setDV("sexo", "M")}>
-                          {t.male}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_rescueSite}</span>
-                      <input className="finput" value={draft?.rescue_site || ""} onChange={setD("rescue_site")} placeholder={t.f_rescueSite} />
-                      <span className="fhint">{t.f_rescueSiteHint}</span>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_notas}</span>
-                      <textarea
-                        className="finput"
-                        rows={3}
-                        value={draft?.notas || ""}
-                        onChange={(e) => setDraft((d) => ({ ...(d || {}), notas: e.target.value }))}
-                        placeholder={t.f_notasHint}
-                      />
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_contact}</span>
-                      <input className="finput" value={draft?.contacto || ""} onChange={setD("contacto")} placeholder="+58…" />
-                    </div>
-                    <div className="note">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
-                      </svg>
-                      {t.rescuedPublicNote}
-                    </div>
-                    <div className="ebtns">
-                      <button className="btng" onClick={clearEdit}>
-                        {t.cancel}
-                      </button>
-                      <button className="btnp" onClick={saveRescatado}>
-                        {t.save}
-                      </button>
-                    </div>
-                    {canDelete && (
-                      <button className="edel" onClick={() => editId && deleteRescatado(editId)}>
-                        {t.del}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {editType === "promote" && (
-                  <div className="form">
-                    <div className="note">
-                      <span className="resc-ic">{ICON.pin}</span>
-                      {t.promoteHint}
-                    </div>
-                    <div className="arow" style={{ borderBottom: "none" }}>
-                      <div className="ai">
-                        <div className="aname">{((draft?.nombres || "") + " " + (draft?.apellidos || "")).trim() || "—"}</div>
-                        <div className="asub">
-                          {[
-                            draft?.edad ? draft.edad + " " + t.yrs : null,
-                            draft?.sexo === "M" ? t.male : draft?.sexo === "F" ? t.female : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_center}</span>
-                      <select className="fselect" value={draft?.location_id || ""} onChange={setD("location_id")}>
-                        {locations.map((l) => (
-                          <option key={l.location_id} value={l.location_id}>
-                            {l.canonical_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="fld">
-                      <span className="flabel">{t.f_status}</span>
-                      <select className="fselect" value={draft?.estatus || "INGRESADO"} onChange={setD("estatus")}>
-                        {statusOpts.map((s) => (
-                          <option key={s.v} value={s.v}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {(isAdmin || isVolunteer) && (
-                      <div className="fld">
-                        <span className="flabel">{t.verified}</span>
-                        <div className="seg">
-                          <button className={"segb " + (!draft?.verified ? "segb-on" : "")} onClick={setDV("verified", false)}>
-                            {t.verifiedNo}
-                          </button>
-                          <button className={"segb " + (draft?.verified ? "segb-on" : "")} onClick={setDV("verified", true)}>
-                            {t.verifiedYes}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    <div className="ebtns">
-                      <button className="btng" onClick={clearEdit}>
-                        {t.cancel}
-                      </button>
-                      <button className="btnp" onClick={savePromotion}>
-                        {t.promoteTitle}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+        <AdminProvider
+          value={{
+            pickingOnMap, setPickingOnMap, user, signOut, openStaffTour, setView, clearEdit, t, lang,
+            recoverMode, setRecoverMode, sendRecovery, recoverSent, setRecoverSent,
+            loginEmail, setLoginEmail, loginBusy, loginErr, setLoginErr, signIn, loginPass, setLoginPass,
+            editType, adminTab, switchTab, isAdmin, isVolunteer,
+            loadAudit, loadContributions, loadVolRequests, loadVolunteers, loadReports, loadRescAdmin,
+            maintenance, toggleMaintenance, maintBusy,
+            contribs, reports, volReqs, audit,
+            admSearchBar, admHit, admQ,
+            newCenter, locations, patients, editCenter, deleteCenter,
+            newDonation, donations, editDonation, deleteDonation,
+            newPerson, editPerson, deletePerson,
+            newRescatado, rescAdmin, startPromote, editRescatado, deleteRescatado,
+            reviewReport,
+            listLoc, setListLoc, listDate, setListDate, todayISO, listNote, setListNote,
+            onPickList, listBusy, listProgress, listResult,
+            reviewVolRequest, volEmail, setVolEmail, volPass, setVolPass, genPass, createVolunteer, volBusy, volunteers, revokeVolunteer,
+            draft, setD, setDV, setDraft, geoQuery, setGeoQuery, geoBusy, geocodeAddress, geoResults, pickGeoResult,
+            saveCenter, saveDonation, savePerson, saveRescatado, savePromotion, reviewContribution,
+            statusOpts, canDelete, editId,
+          }}
+        >
+          <AdminPanel />
+        </AdminProvider>
       )}
 
       {!!toast && <div className="toast">{toast}</div>}
