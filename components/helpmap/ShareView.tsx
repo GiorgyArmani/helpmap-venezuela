@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { ICON } from "./icons";
 import { initials } from "./helpers";
+import { IgPicker } from "./IgPicker";
+import { type ShareFormat } from "./share";
 import { SM, type Lang, type PatientPublic, type Strings } from "./data";
 
 // Share overlay: the WhatsApp-style preview card + share targets for a patient record.
@@ -13,9 +16,13 @@ export function ShareView({
   t: Strings;
   lang: Lang;
   patient: PatientPublic;
-  onShareTo: (target: "wa" | "tg" | "ig" | "copy") => void;
+  onShareTo: (target: "wa" | "tg" | "ig" | "copy", fmt?: ShareFormat) => void;
   onBack: () => void;
 }) {
+  // One "Instagram" button; tapping it reveals the canvas picker (story / post /
+  // square) instead of crowding the grid with one button per format.
+  const [igPick, setIgPick] = useState(false);
+
   return (
     <div className="overlay">
       <div className="ovhead">
@@ -58,7 +65,7 @@ export function ShareView({
           <button className="tgt" onClick={() => onShareTo("tg")}>
             <span className="ti ti-tg">TG</span>Telegram
           </button>
-          <button className="tgt" onClick={() => onShareTo("ig")}>
+          <button className="tgt" onClick={() => setIgPick((v) => !v)} aria-expanded={igPick}>
             <span className="ti ti-ig">IG</span>Instagram
           </button>
           <button className="tgt" onClick={() => onShareTo("copy")}>
@@ -66,6 +73,7 @@ export function ShareView({
             {t.copyLink}
           </button>
         </div>
+        {igPick && <IgPicker t={t} onPick={(fmt) => onShareTo("ig", fmt)} />}
         <p className="share-disc">{ICON.check}{t.shareDisclosure}</p>
       </div>
     </div>

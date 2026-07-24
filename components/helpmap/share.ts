@@ -68,11 +68,31 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-// Generates the patient story banner (1080×1920 PNG via /p/[id]/story) and hands
-// it to the native share sheet as a FILE — on mobile the user can then pick
-// Instagram → Story/Chat (the only way to reach IG stories; IG has no web share
-// intent). Falls back to downloading the image when file-share is unsupported.
+// Generates the patient banner (PNG via /p/[id]/story) and hands it to the native
+// share sheet as a FILE — on mobile the user can then pick Instagram → Story/Chat
+// (the only way to reach IG stories; IG has no web share intent). Falls back to
+// downloading the image when file-share is unsupported.
+//
+// Three canvases, because the team also publishes these as FEED posts and a 9:16
+// story image gets cropped there. One "Instagram" button in the UI opens the picker
+// below; the format is passed through to the image route (see lib/ogFormat.ts).
 export type StoryShareResult = "shared" | "downloaded" | "error";
+export type ShareFormat = "story" | "post" | "square";
+
+// The picker options, in the order they're offered. `key` is the localized label in
+// `Strings`; `es` is the same label for the SSR pages, which are Spanish-only.
+// `w`/`h` draw the little ratio preview so the choice reads at a glance.
+export const IG_FORMATS: {
+  fmt: ShareFormat;
+  key: "igStory" | "igPost" | "igSquare";
+  es: string;
+  w: number;
+  h: number;
+}[] = [
+  { fmt: "story", key: "igStory", es: "Historia · 9:16", w: 18, h: 32 },
+  { fmt: "post", key: "igPost", es: "Publicación · 4:5", w: 26, h: 32 },
+  { fmt: "square", key: "igSquare", es: "Cuadrado · 1:1", w: 30, h: 30 },
+];
 
 // Generic: fetch a server-generated PNG at `storyUrl` and hand it to the native
 // share sheet as a FILE (mobile → Instagram Story), else open it for manual saving.
@@ -114,13 +134,13 @@ async function shareImageFile(storyUrl: string, fileName: string, title: string)
   return "error";
 }
 
-export async function shareStoryImage(id: string, title: string): Promise<StoryShareResult> {
-  return shareImageFile(patientPath(id) + "/story", `helpmap-${id}.png`, title);
+export async function shareStoryImage(id: string, title: string, fmt: ShareFormat = "story"): Promise<StoryShareResult> {
+  return shareImageFile(`${patientPath(id)}/story?f=${fmt}`, `helpmap-${id}-${fmt}.png`, title);
 }
 
-// Same story-image flow for a help point (refugio / centro de acopio).
-export async function shareCenterStoryImage(id: string, title: string): Promise<StoryShareResult> {
-  return shareImageFile(centerPath(id) + "/story", `helpmap-centro-${id}.png`, title);
+// Same image flow for a help point (refugio / centro de acopio / iniciativa).
+export async function shareCenterStoryImage(id: string, title: string, fmt: ShareFormat = "story"): Promise<StoryShareResult> {
+  return shareImageFile(`${centerPath(id)}/story?f=${fmt}`, `helpmap-centro-${id}-${fmt}.png`, title);
 }
 
 // Native OS share sheet (mobile) — shows WhatsApp/Instagram/Telegram directly.

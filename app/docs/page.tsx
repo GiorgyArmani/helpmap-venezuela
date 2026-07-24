@@ -33,9 +33,9 @@ const SECTIONS: { title: Lstr; desc: Lstr; href?: string; feature?: boolean }[] 
   {
     title: { es: "Guía de uso", en: "Usage guide", pt: "Guia de uso" },
     desc: {
-      es: "Cómo buscar a un familiar, explorar el mapa, subir información y usar la app sin conexión.",
-      en: "How to search for a relative, explore the map, upload information and use the app offline.",
-      pt: "Como buscar um familiar, explorar o mapa, enviar informações e usar o app sem conexão.",
+      es: "Manual completo: buscar a un familiar, leer una ficha, el mapa y sus filtros, compartir, colaborar y usar la app sin conexión.",
+      en: "Full manual: search for a relative, read a record, the map and its filters, sharing, contributing and using the app offline.",
+      pt: "Manual completo: buscar um familiar, ler uma ficha, o mapa e seus filtros, compartilhar, colaborar e usar o app sem conexão.",
     },
     href: "/docs/guia",
   },
@@ -75,6 +75,15 @@ const SECTIONS: { title: Lstr; desc: Lstr; href?: string; feature?: boolean }[] 
       pt: "Como participar, quais perfis buscamos e como enviar listas e informações com segurança.",
     },
     href: "/docs/voluntarios",
+  },
+  {
+    title: { es: "Manual del voluntario", en: "Volunteer manual", pt: "Manual do voluntário" },
+    desc: {
+      es: "Paso a paso del panel: cada pestaña, cuándo marcar verificado y las reglas que no se rompen.",
+      en: "Step by step through the panel: every tab, when to mark verified, and the rules that are never broken.",
+      pt: "Passo a passo do painel: cada aba, quando marcar verificado e as regras que nunca se quebram.",
+    },
+    href: "/docs/manual-voluntario",
   },
   {
     title: { es: "Para prensa y aliados", en: "For press & partners", pt: "Para imprensa e parceiros" },
@@ -138,6 +147,13 @@ const ICONS: Record<string, React.ReactNode> = {
       <circle cx="9" cy="7" r="4" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </>,
+  ),
+  "manual-voluntario": sv(
+    <>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      <path d="m9.5 9.5 1.5 1.5 3-3" />
     </>,
   ),
   prensa: sv(

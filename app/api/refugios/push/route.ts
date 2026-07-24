@@ -61,7 +61,10 @@ export async function POST(request: Request) {
     id: body.external_id || undefined,
     name: body.name,
     tipo: body.tipo === "acopio" ? "acopio" : "refugio",
-    estado: body.estado || "abierto",
+    // Only sent when we actually know it (abierto|lleno|cerrado). It used to default to
+    // "abierto", which could have suggested a CLOSED point back open upstream — the one
+    // direction of this field that causes harm.
+    ...(body.estado ? { estado: body.estado } : {}),
     address: body.address ?? null,
     ciudad: body.ciudad ?? null,
     pais: "Venezuela",

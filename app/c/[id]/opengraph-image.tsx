@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
-import { STATE_LABEL, TYPE_META, type LocationType } from "@/components/helpmap/data";
+import { AYUDA_META, STATE_LABEL, TYPE_META, type LocationType } from "@/components/helpmap/data";
+import { ayudaKeys } from "@/components/helpmap/helpers";
 import { fetchCenter } from "./fetchCenter";
 
 export const alt = "HelpMap Venezuela";
@@ -12,6 +13,7 @@ const TYPE_COLOR: Record<LocationType, string> = {
   morgue: "#B9BFC9",
   donation_centre: "#A78BFA",
   comedor: "#2DD4BF",
+  iniciativa: "#EC4899",
 };
 
 // Link-preview card for a help point (refugio/acopio). Shows the public need info so
@@ -26,7 +28,8 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const name = loc ? loc.canonical_name : "HelpMap Venezuela";
   const typeLabel = loc ? TYPE_META[loc.type].es.toUpperCase() : "PUNTO DE AYUDA";
   const place = loc ? [loc.municipality, STATE_LABEL[loc.state]].filter(Boolean).join(" · ") : "Mapa de emergencia humanitario";
-  const need = (ref?.necesita || "").trim().slice(0, 120);
+  // A civic initiative usually states no "necesita" — the ways to help ARE the ask.
+  const need = ((ref?.necesita || "").trim() || ayudaKeys(ref?.ayuda).map((k) => AYUDA_META[k].es).join(" · ")).slice(0, 120);
 
   return new ImageResponse(
     (

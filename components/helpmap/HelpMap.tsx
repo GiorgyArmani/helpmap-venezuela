@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AYUDA_META,
   ESTATUS_ORDER,
   SM,
   STATE_LABEL,
@@ -35,6 +36,7 @@ import {
   shareText,
   telegramUrl,
   whatsappUrl,
+  type ShareFormat,
 } from "./share";
 import Tour from "./Tour";
 import "./helpmap.css";
@@ -45,6 +47,7 @@ import { StatePicker } from "./StatePicker";
 import { Avatar } from "./Avatar";
 import { RescuedView } from "./RescuedView";
 import { RefugiosView } from "./RefugiosView";
+import { EstadoBadge, RefugioStatusNote, UpdatedLine } from "./RefugioStatus";
 import { RefugioShareView } from "./RefugioShareView";
 import { ShareView } from "./ShareView";
 import { DonateView } from "./DonateView";
@@ -59,7 +62,7 @@ import { AdminProvider } from "./AdminContext";
 import { useHelpMapData } from "./useHelpMapData";
 import { useStaffFeed } from "./useStaffFeed";
 import { useMapMarkers } from "./useMapMarkers";
-import { timeAgo, veStateFromAddress, municipalityFromAddress, parseLatLng } from "./helpers";
+import { ayudaKeys, estadoOf, isOpenPoint, timeAgo, veStateFromAddress, municipalityFromAddress, parseLatLng } from "./helpers";
 import {
   INSTAGRAM_HANDLE,
   INSTAGRAM_URL,
@@ -89,6 +92,17 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const [focusId, setFocusId] = useState<string | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Folded = the sheet shrinks to just its handle strip, freeing the whole map. Distinct
+  // from `sheetOpen` (which only toggles between the short and tall list): when you are
+  // navigating BY the map, even the short list is in the way. Session-only on purpose —
+  // never persisted, so a returning family always lands on a visible list.
+  const [sheetMin, setSheetMin] = useState(false);
+  // Anything that reveals the list must also un-fold it, or tapping a pin does nothing
+  // visible. Collapsing (false) leaves a folded sheet folded — that's the user's choice.
+  const showSheet = useCallback((open: boolean) => {
+    setSheetOpen(open);
+    if (open) setSheetMin(false);
+  }, []);
   // The help point (refugio / centro de acopio) currently open in the share overlay,
   // plus the view to return to on back (the map bottom-sheet or the refugios list).
   const [refShareSel, setRefShareSel] = useState<{ loc: Location; ref: Refugio } | null>(null);
@@ -214,8 +228,12 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   const { shadowedRefugios, needsForCenter } = useMemo(() => {
     const shadowed = new Set<string>();
     const needs: Record<string, Refugio> = {};
-    const refLocs = locations.filter((l) => refugioById[l.location_id]);
-    const realLocs = locations.filter((l) => !refugioById[l.location_id]);
+    // Only AcopioVE-shaped centers can be shadowed. A civic initiative also carries a
+    // `refugios` companion row, but it is NOT a duplicate of anything — a brigada that
+    // works out of a hospital's courtyard is its own help point and must keep its pin.
+    const canShadow = (l: Location) => l.type === "shelter" || l.type === "donation_centre";
+    const refLocs = locations.filter((l) => refugioById[l.location_id] && canShadow(l));
+    const realLocs = locations.filter((l) => !refugioById[l.location_id] || !canShadow(l));
     const M_PER_DEG = 111320;
     for (const rl of refLocs) {
       let best: { id: string; d: number } | null = null;
@@ -249,14 +267,21 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // for name/place/coords/contacts, honor the current state filter, and rank the ones
   // that reported needs first so the most actionable rise to the top.
   const refugioNeeds = useMemo(() => {
-    const score = (r: Refugio) => (r.necesita ? 2 : 0) + (r.recibe.length ? 1 : 0);
+    const score = (r: Refugio) =>
+      (r.necesita ? 2 : 0) + (r.recibe.length ? 1 : 0) + (ayudaKeys(r.ayuda).length ? 1 : 0);
     return refugios
       .map((r) => ({ r, loc: locById[r.location_id] }))
       .filter(
         (x): x is { r: Refugio; loc: Location } =>
           !!x.loc &&
           (stateF === "all" || x.loc.state === stateF) &&
-          (!!x.r.necesita || x.r.recibe.length > 0), // only actionable rows → matches the bar
+          // A point that reported itself CLOSED is not asking for donations — keeping it
+          // in the "N puntos necesitan ayuda" list would send people to a shut door. Its
+          // pin and card stay (marked "Cerrado"), so nobody is left wondering.
+          isOpenPoint(x.r) &&
+          // Only actionable rows → matches the bar. A civic initiative that lists ways to
+          // help ("ir a ayudar", "oficios") is asking for help even with no needs text.
+          (!!x.r.necesita || x.r.recibe.length > 0 || ayudaKeys(x.r.ayuda).length > 0),
       )
       .sort((a, b) => score(b.r) - score(a.r) || a.loc.canonical_name.localeCompare(b.loc.canonical_name));
   }, [refugios, locById, stateF]);
@@ -449,13 +474,13 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       // Tapping a center pin opens its list (CLAUDE.md UX request).
       const next = locationSel === id ? null : id;
       setLocationSel(next);
-      setSheetOpen(true);
+      showSheet(true);
       if (next && mapRef.current) {
         const l = locById[id];
         if (l) mapRef.current.panTo([l.lat, l.lng], { animate: false });
       }
     },
-    [locationSel, locById, mapRef],
+    [locationSel, locById, mapRef, showSheet],
   );
   useEffect(() => {
     onMarkerRef.current = onMarker;
@@ -618,7 +643,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     }
     setView("share");
   };
-  const shareTo = async (target: "wa" | "tg" | "ig" | "copy") => {
+  const shareTo = async (target: "wa" | "tg" | "ig" | "copy", fmt: ShareFormat = "story") => {
     if (!selP) return;
     const url = patientUrl(selP.id);
     const text =
@@ -628,10 +653,12 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     if (target === "wa") openShare(whatsappUrl(url, text));
     else if (target === "tg") openShare(telegramUrl(url, text));
     else if (target === "ig") {
-      showToast(t.storyBuilding);
-      const r = await shareStoryImage(selP.id, selP.nombres + " " + selP.apellidos);
-      if (r === "shared") showToast(t.storyShared);
-      else if (r === "downloaded") showToast(t.storyDownloaded);
+      // Same banner, different canvas: 9:16 story vs a feed post (lib/ogFormat.ts).
+      const post = fmt !== "story";
+      showToast(post ? t.postBuilding : t.storyBuilding);
+      const r = await shareStoryImage(selP.id, selP.nombres + " " + selP.apellidos, fmt);
+      if (r === "shared") showToast(post ? t.postShared : t.storyShared);
+      else if (r === "downloaded") showToast(post ? t.postDownloaded : t.storyDownloaded);
       else showToast(t.storyError);
     } else {
       const ok = await copyText(url);
@@ -642,7 +669,8 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // Open the share overlay for a help point's NEED — the same rich system as patients
   // (preview card + WhatsApp/Telegram/Instagram-story/copy), so a need can be shared
   // "a sociales bien" instead of only a raw WhatsApp text (CLAUDE.md §5, focus:
-  // visibilizar necesidades). The IG target generates a 1080×1920 image of the need.
+  // visibilizar necesidades). The IG targets generate an image of the need: 1080×1920
+  // for a story, 1080×1350 for a feed post.
   const shareRefugio = (loc: Location, r: Refugio) => {
     setRefShareSel({ loc, ref: r });
     setRefShareBack(view);
@@ -652,7 +680,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // Build the shareable text for a help point's need. Links to /c/<id> (an SSR page
   // that renders a HelpMap OG preview card), not a bare Maps URL.
   const refShareMessage = (loc: Location, r: Refugio) => {
-    const needs = r.necesita?.trim() || (r.recibe.length ? r.recibe.join(", ") : "");
+    // A civic initiative often has no "necesita" text — what it asks for IS the list of
+    // ways to help. Fall back to those so a shared initiative is still actionable.
+    const ways = ayudaKeys(r.ayuda).map((k) => AYUDA_META[k][lang]);
+    const needs = r.necesita?.trim() || (r.recibe.length ? r.recibe.join(", ") : "") || ways.join(" · ");
     const where = [loc.municipality, STATE_LABEL[loc.state]].filter(Boolean).join(", ");
     return (
       `🆘 ${loc.canonical_name}${where ? " · " + where : ""} necesita ayuda` +
@@ -661,7 +692,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     );
   };
 
-  const shareRefugioTo = async (target: "wa" | "tg" | "ig" | "copy") => {
+  const shareRefugioTo = async (target: "wa" | "tg" | "ig" | "copy", fmt: ShareFormat = "story") => {
     if (!refShareSel) return;
     const { loc, ref } = refShareSel;
     const url = centerUrl(loc.location_id);
@@ -669,10 +700,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     if (target === "wa") openShare(whatsappUrl(url, text));
     else if (target === "tg") openShare(telegramUrl(url, text));
     else if (target === "ig") {
-      showToast(t.storyBuilding);
-      const r = await shareCenterStoryImage(loc.location_id, loc.canonical_name);
-      if (r === "shared") showToast(t.storyShared);
-      else if (r === "downloaded") showToast(t.storyDownloaded);
+      const post = fmt !== "story";
+      showToast(post ? t.postBuilding : t.storyBuilding);
+      const r = await shareCenterStoryImage(loc.location_id, loc.canonical_name, fmt);
+      if (r === "shared") showToast(post ? t.postShared : t.storyShared);
+      else if (r === "downloaded") showToast(post ? t.postDownloaded : t.storyDownloaded);
       else showToast(t.storyError);
     } else {
       const ok = await copyText(url);
@@ -693,7 +725,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     const keep = cur && (v === "all" || cur.state === v) ? locationSel : null;
     setStateF(v);
     setLocationSel(keep);
-    setSheetOpen(true);
+    showSheet(true);
     if (v !== "all") {
       const c = centroidForState(v);
       if (mapRef.current && c) mapRef.current.setView(c, 11, { animate: false });
@@ -710,11 +742,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     const keep = cur && (next.size === 0 || next.has(cur.type)) ? locationSel : null;
     setTypeF(next);
     setLocationSel(keep);
-    setSheetOpen(true);
+    showSheet(true);
   };
   const pickCenter = (id: string | null) => {
     setLocationSel(id);
-    setSheetOpen(true);
+    showSheet(true);
     if (id) flyTo(locById[id]);
   };
   const seeOnMap = () => {
@@ -773,6 +805,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
       ref_responsable: r?.responsable ?? "",
       ref_address: r?.address ?? "",
       ref_animal: r?.es_animal ?? false,
+      ref_estado: estadoOf(r) ?? "",
+      ini_categoria: r?.categoria ?? "",
+      ini_desc: r?.descripcion ?? "",
+      ini_ayuda: r?.ayuda ?? [],
+      ini_social: r?.social_url ?? "",
     });
   };
   const newCenter = () => {
@@ -780,7 +817,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setEditId(null);
     setGeoQuery("");
     setGeoResults([]);
-    setDraft({ canonical_name: "", type: "hospital", state: "distrito_capital", municipality: "", lat: "", lng: "", ref_recibe: "", ref_necesita: "", ref_horario: "", ref_responsable: "", ref_address: "", ref_animal: false });
+    setDraft({ canonical_name: "", type: "hospital", state: "distrito_capital", municipality: "", lat: "", lng: "", ref_recibe: "", ref_necesita: "", ref_horario: "", ref_responsable: "", ref_address: "", ref_animal: false, ref_estado: "", ini_categoria: "", ini_desc: "", ini_ayuda: [], ini_social: "" });
   };
 
   // Geocode by NAME or address via OpenStreetMap Nominatim (free, no key — same
@@ -937,6 +974,10 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         tipo: loc.type === "donation_centre" ? "acopio" : "refugio",
         external_id: r.external_id,
         name: loc.canonical_name,
+        // Operating status travels upstream too: if our volunteer confirms a point closed,
+        // AcopioVE should hear it (moderated on their side). Omitted when unknown so we
+        // never suggest "abierto" we can't vouch for.
+        estado: estadoOf(r),
         address: r.address,
         ciudad: loc.municipality,
         lat: loc.lat,
@@ -990,9 +1031,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
     setLocations((ls) => (editId ? ls.map((l) => (l.location_id === obj.location_id ? obj : l)) : [...ls, obj]));
     // Shelter/acopio needs (recibe/necesita/…) live in the companion `refugios` table.
     // Upsert it whenever the center is a refugio (shelter) OR a punto de acopio
-    // (donation_centre) — both carry AcopioVE needs (CLAUDE.md §14). Non-fatal: the
-    // center already saved.
-    if (obj.type === "shelter" || obj.type === "donation_centre") {
+    // (donation_centre) — both carry AcopioVE needs (CLAUDE.md §14) — and for a civic
+    // initiative (type=iniciativa), which reuses the same companion row plus its own four
+    // fields: categoría / qué hacen / cómo ayudar / enlace público (db/iniciativas.sql).
+    // Non-fatal: the center already saved.
+    if (obj.type === "shelter" || obj.type === "donation_centre" || obj.type === "iniciativa") {
       const existing = refugioById[obj.location_id];
       const recibe = (d.ref_recibe || "")
         .split(",")
@@ -1008,13 +1051,41 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         address: d.ref_address?.trim() || null,
         external_id: existing?.external_id ?? null,
         es_animal: !!d.ref_animal,
-        last_confirmed_at: existing?.last_confirmed_at ?? null,
+        // Operating status. "" in the form = sin dato → null (never assume abierto).
+        // A staff member marking a point cerrado/lleno is the fastest correction we have,
+        // and it also travels back to AcopioVE via the push below.
+        estado: d.ref_estado || null,
+        // Marking it open IS a confirmation — stamp it so the card can say when a human
+        // last vouched for this point, not just when the row was edited.
+        last_confirmed_at:
+          d.ref_estado && d.ref_estado !== (existing?.estado ?? "")
+            ? new Date().toISOString()
+            : existing?.last_confirmed_at ?? null,
         // Stamp the local edit time: this is what freshest-wins compares against, so a
         // staff edit here is never clobbered by the next AcopioVE sync (updated_at is
         // app-managed — db/refugios.sql has no touch trigger).
         updated_at: new Date().toISOString(),
+        // Initiative-only columns are sent ONLY for an iniciativa: db/iniciativas.sql adds
+        // them, and until it has been run, naming them here would fail the upsert for every
+        // shelter/acopio edit too. An iniciativa can't exist before that migration anyway
+        // (its enum value comes from the same setup step).
+        ...(obj.type === "iniciativa"
+          ? {
+              categoria: d.ini_categoria?.trim() || null,
+              descripcion: d.ini_desc?.trim() || null,
+              ayuda: d.ini_ayuda ?? [],
+              social_url: d.ini_social?.trim() || null,
+            }
+          : {}),
       };
-      const { error: refErr } = await getSupabase().from("refugios").upsert(refRow);
+      let refErr = (await getSupabase().from("refugios").upsert(refRow)).error;
+      if (refErr && /estado/i.test(refErr.message)) {
+        // db/refugios_estado.sql hasn't been run yet — save everything else rather than
+        // losing the staff member's edit over a column that isn't there.
+        const { estado: _drop, ...noEstado } = refRow;
+        void _drop;
+        refErr = (await getSupabase().from("refugios").upsert(noEstado)).error;
+      }
       if (!refErr) {
         setRefugios((rs) =>
           rs.some((r) => r.location_id === refRow.location_id)
@@ -1024,7 +1095,9 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         // Offer this update back to AcopioVE as a moderated suggestion (best-effort;
         // no-ops unless the team enabled ACOPIOVE_PUSH_ENABLED). Both apps improve each
         // other — whoever has the fresher data suggests it upstream (CLAUDE.md §14).
-        pushRefugioToAcopio(obj, refRow);
+        // Iniciativas are OURS, not AcopioVE's data model (they have no matching tipo),
+        // so they are never pushed upstream.
+        if (obj.type !== "iniciativa") pushRefugioToAcopio(obj, refRow);
       }
     }
     notifyCenter(editId ? "updated" : "created", obj);
@@ -1523,7 +1596,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         body: JSON.stringify({ id, action }),
       });
       if (res.ok) {
-        showToast(action === "approve" ? t.volApproved : t.volRejected);
+        // Access is granted by the role row; the welcome+manual mail is best-effort.
+        // Tell the admin when it didn't go out so they can hand over the manual link
+        // another way (deliverability is still shaky until SPF/DKIM/DMARC are set up).
+        const emailed = action === "approve" ? await res.json().then((d) => d?.emailed !== false).catch(() => true) : true;
+        showToast(action === "reject" ? t.volRejected : emailed ? t.volApproved : t.volApprovedNoMail);
         setVolReqs((r) => r.filter((x) => x.id !== id));
         if (action === "approve") loadVolunteers();
       } else {
@@ -1605,7 +1682,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // hospital → no pin of their own, selecting one would fly nowhere). Honors the state filter.
   const centerFilterGroups = useMemo(() => {
     const inState = mapLocations.filter((l) => stateF === "all" || l.state === stateF);
-    const order: LocationType[] = ["hospital", "shelter", "comedor", "morgue", "donation_centre"];
+    const order: LocationType[] = ["hospital", "shelter", "comedor", "morgue", "donation_centre", "iniciativa"];
     return order
       .map((type) => ({
         type,
@@ -1667,14 +1744,16 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
   // A selected center's needs card: its own refugio row, or a refugio merged onto it
   // (a coincident AcopioVE hospital-refuge that we shadowed to avoid a duplicate pin).
   const selRefugio = locationSel ? refugioById[locationSel] ?? needsForCenter[locationSel] ?? null : null;
+  const selAyuda = ayudaKeys(selRefugio?.ayuda);
   const showDonationInfo =
     !!selStateLoc &&
     (selStateLoc.type === "donation_centre" ||
       selStateLoc.type === "comedor" ||
+      selStateLoc.type === "iniciativa" ||
       (list.length === 0 && !query && status === "all"));
 
   return (
-    <div className="app" style={rootStyle}>
+    <div className={"app" + (sheetMin ? " sheetmin" : "")} style={rootStyle}>
       <div className="map" ref={containerRef}></div>
 
       <div className="topbar">
@@ -1807,7 +1886,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
-              setSheetOpen(true);
+              showSheet(true);
             }}
           />
           {!!query && (
@@ -1960,8 +2039,20 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
         </div>
       )}
 
-      <div className={"sheet " + (sheetOpen ? "sheet-open" : "")}>
-        <button className="handle" onClick={() => setSheetOpen((s) => !s)}>
+      <div className={"sheet " + (sheetMin ? "sheet-min " : "") + (sheetOpen ? "sheet-open" : "")}>
+        {/* Fold the whole list away so the map is usable on its own. Sits OUTSIDE the
+            handle button — a <button> can't be nested inside another <button>. */}
+        <button
+          className="hfold"
+          onClick={() => setSheetMin((m) => !m)}
+          aria-expanded={!sheetMin}
+          aria-label={sheetMin ? t.sheetUnfold : t.sheetFold}
+          title={sheetMin ? t.sheetUnfold : t.sheetFold}
+        >
+          {sheetMin ? ICON.foldUp : ICON.foldDown}
+        </button>
+        {/* Tapping the strip while folded restores it — one obvious way back. */}
+        <button className="handle" onClick={() => (sheetMin ? setSheetMin(false) : setSheetOpen((s) => !s))}>
           <span className="hbar"></span>
           <div className="hrow2">
             <span className="hcount">
@@ -1987,16 +2078,6 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                 </i>
               </span>
             )}
-            <svg
-              className={"hchev " + (sheetOpen ? "hchev-up" : "")}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
           </div>
           {/* Whole-list freshness (not just per-card): "hace 6h" per record hides how stale
               the rest of a hospital's list might be, so surface one number for the selection. */}
@@ -2035,9 +2116,40 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           {selRefugio && selStateLoc && (
             <div className="refcard">
               <div className="refhead">
-                <span className="refkick">{ICON.pin}{selStateLoc.type === "donation_centre" ? t.refAcopioInfo : t.refShelterInfo}</span>
+                <span className="refkick">
+                  {selStateLoc.type === "iniciativa" ? ICON.users : ICON.pin}
+                  {selStateLoc.type === "iniciativa"
+                    ? t.iniInfo
+                    : selStateLoc.type === "donation_centre"
+                      ? t.refAcopioInfo
+                      : t.refShelterInfo}
+                </span>
+                <EstadoBadge r={selRefugio} lang={lang} />
                 {selRefugio.es_animal && <span className="refanimal">{t.refAnimal}</span>}
+                {selRefugio.categoria && <span className="inicat">{selRefugio.categoria}</span>}
               </div>
+              {/* Closed / full / stale warning FIRST — before the needs. Someone reading
+                  "necesita agua" must not miss that the point shut down (AcopioVE marks
+                  ~10 of its acopios cerrado). */}
+              <RefugioStatusNote r={selRefugio} t={t} />
+              {/* Civic initiative: what they do, and the ways to help that are NOT money
+                  — the reason this type exists (CLAUDE.md §14 iniciativas civiles). */}
+              {selRefugio.descripcion && (
+                <div className="refblock">
+                  <span className="reflabel">{ICON.info}{t.iniAbout}</span>
+                  <p className="refneedtxt">{selRefugio.descripcion}</p>
+                </div>
+              )}
+              {selAyuda.length > 0 && (
+                <div className="refblock">
+                  <span className="reflabel">{ICON.volunteer}{t.iniHelpWays}</span>
+                  <div className="refchips">
+                    {selAyuda.map((k) => (
+                      <span key={k} className="refchip inichip">{AYUDA_META[k][lang]}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {selRefugio.necesita && (
                 <div className="refneed">
                   <span className="reflabel">{ICON.volunteer}{t.refNeeds}</span>
@@ -2067,9 +2179,13 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   )}
                 </div>
               )}
-              {!selRefugio.necesita && selRefugio.recibe.length === 0 && (
-                <p className="refnonote">{t.refNoNeeds}</p>
-              )}
+              {!selRefugio.necesita &&
+                selRefugio.recibe.length === 0 &&
+                // For an initiative the note only helps when the card is otherwise bare —
+                // with a description or help chips there IS something actionable already.
+                (selStateLoc.type === "iniciativa"
+                  ? !selRefugio.descripcion && selAyuda.length === 0 && <p className="refnonote">{t.iniNoNeeds}</p>
+                  : <p className="refnonote">{t.refNoNeeds}</p>)}
               <div className="dactions">
                 <a
                   className="btnp"
@@ -2097,20 +2213,33 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                     {t.call}
                   </a>
                 )}
+                {selRefugio.social_url && (
+                  <a className="btng" href={selRefugio.social_url} target="_blank" rel="noopener noreferrer">
+                    {ICON.share}
+                    {t.iniSocial}
+                  </a>
+                )}
                 <button className="btng" onClick={() => shareRefugio(selStateLoc, selRefugio)}>
                   {ICON.share}
                   {t.refShareCta}
                 </button>
               </div>
               <div className="reffoot">
+                {/* How old the data is — AcopioVE surfaces this on every card and we were
+                    storing it (refugios.updated_at) without ever showing it. */}
+                <UpdatedLine r={selRefugio} t={t} lang={lang} />
                 {selRefugio.last_confirmed_at && (
                   <span>{t.refConfirmed} {timeAgo(selRefugio.last_confirmed_at, lang)}</span>
                 )}
                 {selRefugio.fuente && <span>{t.refSource}: {selRefugio.fuente}</span>}
-                {/* CC-BY 4.0 attribution (required by AcopioVE's license). */}
-                <a className="refattrib" href="https://acopiove.org" target="_blank" rel="noopener noreferrer">
-                  {t.refAttrib}
-                </a>
+                {/* CC-BY 4.0 attribution — required by AcopioVE's license, so it belongs
+                    ONLY on rows that actually came from AcopioVE (external_id). A center
+                    the team typed in (incl. every iniciativa) is our own data. */}
+                {selRefugio.external_id && (
+                  <a className="refattrib" href="https://acopiove.org" target="_blank" rel="noopener noreferrer">
+                    {t.refAttrib}
+                  </a>
+                )}
               </div>
             </div>
           )}
@@ -2124,7 +2253,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
                   className={"lchip " + (status === c.key ? "lchip-on" : "")}
                   onClick={() => {
                     setStatus(c.key);
-                    setSheetOpen(true);
+                    showSheet(true);
                   }}
                 >
                   {c.key !== "all" && <span className={"cdot " + c.dotCls}></span>}
@@ -2193,7 +2322,11 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
           {list.length === 0 && showDonationInfo && selStateLoc && !selRefugio && selStateLoc.type !== "comedor" && (
             <div className="locinfo">
               <div className="empty">
-                {selStateLoc.type === "donation_centre" ? t.donationInfo : t.noPatientsHere}
+                {selStateLoc.type === "donation_centre"
+                  ? t.donationInfo
+                  : selStateLoc.type === "iniciativa"
+                    ? t.iniInfo
+                    : t.noPatientsHere}
               </div>
               <div className="dactions">
                 <a
@@ -2317,7 +2450,7 @@ export default function HelpMap({ accent, mapLabels = true, showReport = true }:
 
       {/* ---- Refugios needs list (visibilizar necesidades + prompt to collaborate) ---- */}
       {view === "refugios" && (
-        <RefugiosView t={t} refugioNeeds={refugioNeeds} onShare={shareRefugio} onClose={() => setView(null)} />
+        <RefugiosView t={t} lang={lang} refugioNeeds={refugioNeeds} onShare={shareRefugio} onClose={() => setView(null)} />
       )}
 
       {/* ---- Admin overlay (Supabase Auth protected) ---- */}

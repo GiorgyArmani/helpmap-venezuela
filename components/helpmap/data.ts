@@ -28,7 +28,7 @@ export type VzlaState =
   | "tachira"
   | "trujillo"
   | "zulia";
-export type LocationType = "hospital" | "shelter" | "morgue" | "donation_centre" | "comedor";
+export type LocationType = "hospital" | "shelter" | "morgue" | "donation_centre" | "comedor" | "iniciativa";
 export type Estatus = "INGRESADO" | "ALTA" | "FALLECIDO";
 export type Sexo = "M" | "F";
 export type Lang = "es" | "en" | "pt";
@@ -74,8 +74,23 @@ export interface Refugio {
   address: string | null;
   external_id: string | null;
   es_animal: boolean;
+  // Operating status (db/refugios_estado.sql, AcopioVE's vocabulary). NULL/absent =
+  // unknown → the UI shows no badge. NEVER assume "abierto": some AcopioVE points are
+  // already closed, and sending a family to a shut door is the failure that hurts.
+  estado?: RefugioEstado | null;
   last_confirmed_at: string | null;
+  // When this record was last updated (AcopioVE's own timestamp for synced rows, the
+  // local edit time for staff edits). Shown as "Actualizado hace X" — in an emergency
+  // the age of the data is part of the data.
   updated_at?: string;
+  // Civic-initiative fields (db/iniciativas.sql). `refugios` is the generic "what this
+  // place receives / needs" companion — shelters, puntos de acopio AND iniciativas all
+  // use it, so the needs card / needs list / share flow work for all three unchanged.
+  // Null/empty for the first two.
+  categoria?: string | null;
+  descripcion?: string | null;
+  ayuda?: string[];
+  social_url?: string | null;
 }
 
 // `patients_public` view — already privacy-filtered at the DB layer:
@@ -215,6 +230,42 @@ export const TYPE_META: Record<LocationType, TypeMeta> = {
   // no patients — like donation_centre. Teal color: distinct from the status filters
   // (blue/green/gray in SM) AND the other type colors (red/amber/gray/purple).
   comedor: { es: "Comedor", en: "Free kitchen", pt: "Cozinha", hasPatients: false, color: "oklch(0.64 0.12 190)" },
+  // Iniciativa civil = a citizen-run initiative people can physically GO to and help
+  // (brigada, apoyo psicológico, punto de agua, reconstrucción…). Informational pin,
+  // no patients. Rose: the last clearly-distinct hue left — apart from hospital red
+  // (25) and acopio purple (300) in lightness+hue, and far from the status filters.
+  iniciativa: {
+    es: "Iniciativa civil",
+    en: "Civic initiative",
+    pt: "Iniciativa civil",
+    hasPatients: false,
+    color: "oklch(0.64 0.18 345)",
+  },
+};
+
+// The ways a person can help at an initiative — the whole point of this type is that
+// helping is NOT only "donar económicamente". Stored in refugios.ayuda as text[] keys
+// (db/iniciativas.sql) and rendered as localized chips.
+export type AyudaKey = "voluntariado" | "especie" | "oficios" | "difusion" | "economico";
+export const AYUDA_ORDER: AyudaKey[] = ["voluntariado", "especie", "oficios", "difusion", "economico"];
+export const AYUDA_META: Record<AyudaKey, { es: string; en: string; pt: string }> = {
+  voluntariado: { es: "Ir a ayudar", en: "Volunteer on site", pt: "Ir ajudar" },
+  especie: { es: "Donar insumos", en: "Donate supplies", pt: "Doar insumos" },
+  oficios: { es: "Oficios y servicios", en: "Trades & services", pt: "Ofícios e serviços" },
+  difusion: { es: "Difundir", en: "Spread the word", pt: "Divulgar" },
+  economico: { es: "Aporte económico", en: "Financial support", pt: "Aporte financeiro" },
+};
+
+// Operating status of a help point (refugio / acopio / iniciativa) — AcopioVE's
+// vocabulary, kept identical so the two apps stay comparable and our pushes validate
+// upstream (db/refugios_estado.sql). Some AcopioVE points are already `cerrado`, which is
+// exactly why this must be visible: an out-of-date "open" sends a family to a shut door.
+export type RefugioEstado = "abierto" | "lleno" | "cerrado";
+export const ESTADO_ORDER: RefugioEstado[] = ["abierto", "lleno", "cerrado"];
+export const ESTADO_META: Record<RefugioEstado, { es: string; en: string; pt: string; cls: string }> = {
+  abierto: { es: "Abierto", en: "Open", pt: "Aberto", cls: "est-open" },
+  lleno: { es: "Lleno", en: "Full", pt: "Lotado", cls: "est-full" },
+  cerrado: { es: "Cerrado", en: "Closed", pt: "Fechado", cls: "est-closed" },
 };
 
 export interface StatusMeta {
@@ -261,6 +312,8 @@ export interface Strings {
   f_procedencia: string; f_procedenciaPh: string; f_procedenciaHint: string;
   f_dataDate: string; f_dataDateHint: string;
   storyBuilding: string; storyShared: string; storyDownloaded: string; storyError: string;
+  igPickTitle: string; igStory: string; igPost: string; igSquare: string;
+  postBuilding: string; postShared: string; postDownloaded: string;
   donate: string; donateTitle: string; donateSub: string; donateCta: string; donateNote: string;
   saveError: string; delBlocked: string;
   directions: string;
@@ -312,7 +365,7 @@ export interface Strings {
   f_volPhone: string; volSignupSend: string; volSignupSending: string; volSignupNote: string;
   volSignupReq: string; volSignupDoneTitle: string; volSignupDoneBody: string;
   volRequests: string; volReqNone: string; volApprove: string; volReject: string;
-  volApproved: string; volRejected: string; volReqReviewNote: string;
+  volApproved: string; volApprovedNoMail: string; volRejected: string; volReqReviewNote: string;
   volSignupPass: string; volSignupPassHint: string; volPassShort: string; volEmailTaken: string;
   volReqWhy: string;
   fabCta: string;
@@ -328,11 +381,16 @@ export interface Strings {
   refShelterInfo: string; refAcopioInfo: string; refReceives: string; refNeeds: string; refSchedule: string;
   refManager: string; refConfirmed: string; refSource: string; refAnimal: string;
   refNoNeeds: string;
+  refUpdated: string; refUpdatedOld: string; refClosedNote: string; refFullNote: string;
   refEditTitle: string; f_refRecibe: string; f_refRecibeHint: string; f_refNecesita: string;
   f_refNecesitaHint: string; f_refHorario: string; f_refResponsable: string; f_refAddress: string;
-  f_refAnimal: string;
+  f_refAnimal: string; f_refEstado: string; f_refEstadoHint: string; f_refEstadoUnknown: string;
   refNeedBar: string; refListTitle: string; refListSub: string; refListEmpty: string;
   refShareCta: string; refShareTag: string; refHelpHow: string; refAttrib: string;
+  sheetFold: string; sheetUnfold: string;
+  iniInfo: string; iniAbout: string; iniHelpWays: string; iniNoNeeds: string; iniSocial: string;
+  iniEditTitle: string; f_iniCategoria: string; f_iniCategoriaHint: string; f_iniDesc: string;
+  f_iniAyuda: string; f_iniAyudaHint: string; f_iniSocial: string;
 }
 
 export const T: Record<Lang, Strings> = {
@@ -407,6 +465,13 @@ export const T: Record<Lang, Strings> = {
     storyShared: "Elige Instagram → Historia y agrega el sticker de enlace.",
     storyDownloaded: "Abrimos la imagen en otra pestaña: guárdala y súbela a tu historia de Instagram.",
     storyError: "No se pudo crear la imagen. Intenta de nuevo.",
+    igPickTitle: "Elige el formato",
+    igStory: "Historia · 9:16",
+    igPost: "Publicación · 4:5",
+    igSquare: "Cuadrado · 1:1",
+    postBuilding: "Generando imagen para tu publicación…",
+    postShared: "Elige Instagram → Publicación y pega el enlace en la descripción.",
+    postDownloaded: "Abrimos la imagen en otra pestaña: guárdala y súbela como publicación.",
     donate: "Donar",
     donateTitle: "Donar",
     donateSub: "Apoya a las organizaciones que están ayudando en el terreno.",
@@ -591,6 +656,7 @@ export const T: Record<Lang, Strings> = {
     volApprove: "Aprobar",
     volReject: "Rechazar",
     volApproved: "Voluntario aprobado y notificado por correo",
+    volApprovedNoMail: "Voluntario aprobado, pero el correo no salió: pásale el manual por WhatsApp",
     volRejected: "Solicitud rechazada",
     volReqReviewNote: "Solicitudes públicas de voluntariado. La cuenta ya existe (sin acceso); al aprobar se le activa el rol. Rechazar elimina la cuenta.",
     volSignupPass: "Crea tu contraseña",
@@ -642,6 +708,10 @@ export const T: Record<Lang, Strings> = {
     refSource: "Fuente",
     refAnimal: "Refugio de animales",
     refNoNeeds: "Este refugio aún no ha reportado necesidades específicas. Puedes contactarlo para saber cómo ayudar.",
+    refUpdated: "Actualizado",
+    refUpdatedOld: "Dato con varios días. Confirma por teléfono antes de ir.",
+    refClosedNote: "Este punto reportó estar CERRADO. No vayas sin confirmar antes.",
+    refFullNote: "Este punto reportó estar LLENO / sin capacidad. Confirma antes de ir.",
     refEditTitle: "Necesidades del refugio",
     f_refRecibe: "Recibe (tipos de donación)",
     f_refRecibeHint: "Separa cada tipo con una coma (ej.: Agua, Medicamentos, Pañales).",
@@ -651,9 +721,26 @@ export const T: Record<Lang, Strings> = {
     f_refResponsable: "Responsable / contacto",
     f_refAddress: "Dirección / referencia",
     f_refAnimal: "¿Es refugio de animales?",
+    f_refEstado: "Estado del punto",
+    f_refEstadoHint: "¿Sigue abierto? Márcalo cerrado o lleno apenas lo sepas: la gente decide con esto.",
+    f_refEstadoUnknown: "Sin dato",
+    sheetFold: "Ocultar la lista",
+    sheetUnfold: "Mostrar la lista",
+    iniInfo: "Iniciativa civil · cómo participar",
+    iniAbout: "Qué hacen",
+    iniHelpWays: "Cómo puedes ayudar",
+    iniNoNeeds: "Esta iniciativa aún no detalló qué necesita. Contáctala para saber cómo sumarte.",
+    iniSocial: "Ver la iniciativa",
+    iniEditTitle: "Iniciativa civil",
+    f_iniCategoria: "Tipo de iniciativa",
+    f_iniCategoriaHint: "Ej.: Brigada de escombros, Apoyo psicológico, Punto de agua, Rescate animal.",
+    f_iniDesc: "Qué hacen",
+    f_iniAyuda: "Cómo puede ayudar la gente",
+    f_iniAyudaHint: "Marca todas las formas de apoyo que reciben. Aparecen como opciones en la ficha.",
+    f_iniSocial: "Enlace público (grupo, Instagram, formulario)",
     refNeedBar: "{n} centros necesitan ayuda",
-    refListTitle: "Refugios y acopios · cómo colaborar",
-    refListSub: "Necesidades reportadas por refugios y puntos de acopio. Colabora como puedas, donde puedas: acércales lo que necesitan, o comparte para que llegue a más gente.",
+    refListTitle: "Refugios, acopios e iniciativas · cómo colaborar",
+    refListSub: "Necesidades reportadas por refugios, puntos de acopio e iniciativas civiles. Colabora como puedas, donde puedas: acércales lo que necesitan, o comparte para que llegue a más gente.",
     refListEmpty: "Aún no hay necesidades reportadas. Vuelve pronto.",
     refShareCta: "Compartir necesidad",
     refShareTag: "Colabora como puedas, donde puedas · HelpMap VE",
@@ -731,6 +818,13 @@ export const T: Record<Lang, Strings> = {
     storyShared: "Pick Instagram → Story and add the link sticker.",
     storyDownloaded: "We opened the image in a new tab: save it and upload it to your Instagram story.",
     storyError: "Couldn't create the image. Try again.",
+    igPickTitle: "Choose the format",
+    igStory: "Story · 9:16",
+    igPost: "Post · 4:5",
+    igSquare: "Square · 1:1",
+    postBuilding: "Generating image for your post…",
+    postShared: "Pick Instagram → Post and paste the link in the caption.",
+    postDownloaded: "We opened the image in a new tab: save it and upload it as a post.",
     donate: "Donate",
     donateTitle: "Donate",
     donateSub: "Support the organizations helping on the ground.",
@@ -915,6 +1009,7 @@ export const T: Record<Lang, Strings> = {
     volApprove: "Approve",
     volReject: "Reject",
     volApproved: "Volunteer approved and emailed",
+    volApprovedNoMail: "Volunteer approved, but the email failed: send them the manual by WhatsApp",
     volRejected: "Application rejected",
     volReqReviewNote: "Public volunteer applications. The account already exists (no access); approving grants the role. Rejecting deletes the account.",
     volSignupPass: "Create your password",
@@ -966,6 +1061,10 @@ export const T: Record<Lang, Strings> = {
     refSource: "Source",
     refAnimal: "Animal shelter",
     refNoNeeds: "This shelter hasn't reported specific needs yet. You can contact them to ask how to help.",
+    refUpdated: "Updated",
+    refUpdatedOld: "This info is several days old. Call to confirm before going.",
+    refClosedNote: "This point reported it is CLOSED. Don't go without confirming first.",
+    refFullNote: "This point reported it is FULL / at capacity. Confirm before going.",
     refEditTitle: "Shelter needs",
     f_refRecibe: "Accepts (donation types)",
     f_refRecibeHint: "Separate each type with a comma (e.g. Water, Medicine, Diapers).",
@@ -975,9 +1074,26 @@ export const T: Record<Lang, Strings> = {
     f_refResponsable: "Contact person",
     f_refAddress: "Address / reference",
     f_refAnimal: "Is it an animal shelter?",
+    f_refEstado: "Point status",
+    f_refEstadoHint: "Still open? Mark it closed or full as soon as you know — people decide based on this.",
+    f_refEstadoUnknown: "No data",
+    sheetFold: "Hide the list",
+    sheetUnfold: "Show the list",
+    iniInfo: "Civic initiative · how to take part",
+    iniAbout: "What they do",
+    iniHelpWays: "How you can help",
+    iniNoNeeds: "This initiative hasn't listed what it needs yet. Contact them to ask how to join in.",
+    iniSocial: "Visit the initiative",
+    iniEditTitle: "Civic initiative",
+    f_iniCategoria: "Kind of initiative",
+    f_iniCategoriaHint: "E.g. Rubble-clearing brigade, Mental health support, Water point, Animal rescue.",
+    f_iniDesc: "What they do",
+    f_iniAyuda: "How people can help",
+    f_iniAyudaHint: "Tick every kind of support they accept. These show up as options on the card.",
+    f_iniSocial: "Public link (group, Instagram, form)",
     refNeedBar: "{n} centers need help",
-    refListTitle: "Shelters & donation points · how to help",
-    refListSub: "Needs reported by shelters and donation points. Help however you can, wherever you can: bring them what they need, or share so it reaches more people.",
+    refListTitle: "Shelters, donation points & initiatives · how to help",
+    refListSub: "Needs reported by shelters, donation points and civic initiatives. Help however you can, wherever you can: bring them what they need, or share so it reaches more people.",
     refListEmpty: "No needs reported yet. Check back soon.",
     refShareCta: "Share this need",
     refShareTag: "Help however you can, wherever you can · HelpMap VE",
@@ -1055,6 +1171,13 @@ export const T: Record<Lang, Strings> = {
     storyShared: "Escolha Instagram → Story e adicione o sticker de link.",
     storyDownloaded: "Abrimos a imagem em outra aba: salve-a e envie para seu story do Instagram.",
     storyError: "Não foi possível criar a imagem. Tente novamente.",
+    igPickTitle: "Escolha o formato",
+    igStory: "Story · 9:16",
+    igPost: "Publicação · 4:5",
+    igSquare: "Quadrado · 1:1",
+    postBuilding: "Gerando imagem para sua publicação…",
+    postShared: "Escolha Instagram → Publicação e cole o link na legenda.",
+    postDownloaded: "Abrimos a imagem em outra aba: salve-a e publique no feed.",
     donate: "Doar",
     donateTitle: "Doar",
     donateSub: "Apoie as organizações que estão ajudando no local.",
@@ -1239,6 +1362,7 @@ export const T: Record<Lang, Strings> = {
     volApprove: "Aprovar",
     volReject: "Rejeitar",
     volApproved: "Voluntário aprovado e notificado por e-mail",
+    volApprovedNoMail: "Voluntário aprovado, mas o e-mail não saiu: envie o manual por WhatsApp",
     volRejected: "Solicitação rejeitada",
     volReqReviewNote: "Solicitações públicas de voluntariado. A conta já existe (sem acesso); ao aprovar, o papel é ativado. Rejeitar exclui a conta.",
     volSignupPass: "Crie sua senha",
@@ -1290,6 +1414,10 @@ export const T: Record<Lang, Strings> = {
     refSource: "Fonte",
     refAnimal: "Abrigo de animais",
     refNoNeeds: "Este abrigo ainda não reportou necessidades específicas. Você pode entrar em contato para saber como ajudar.",
+    refUpdated: "Atualizado",
+    refUpdatedOld: "Dado com vários dias. Confirme por telefone antes de ir.",
+    refClosedNote: "Este ponto reportou estar FECHADO. Não vá sem confirmar antes.",
+    refFullNote: "Este ponto reportou estar LOTADO / sem capacidade. Confirme antes de ir.",
     refEditTitle: "Necessidades do abrigo",
     f_refRecibe: "Recebe (tipos de doação)",
     f_refRecibeHint: "Separe cada tipo com uma vírgula (ex.: Água, Remédios, Fraldas).",
@@ -1299,9 +1427,26 @@ export const T: Record<Lang, Strings> = {
     f_refResponsable: "Responsável / contato",
     f_refAddress: "Endereço / referência",
     f_refAnimal: "É abrigo de animais?",
+    f_refEstado: "Estado do ponto",
+    f_refEstadoHint: "Continua aberto? Marque fechado ou lotado assim que souber — as pessoas decidem com isso.",
+    f_refEstadoUnknown: "Sem dado",
+    sheetFold: "Ocultar a lista",
+    sheetUnfold: "Mostrar a lista",
+    iniInfo: "Iniciativa civil · como participar",
+    iniAbout: "O que fazem",
+    iniHelpWays: "Como você pode ajudar",
+    iniNoNeeds: "Esta iniciativa ainda não detalhou o que precisa. Entre em contato para saber como participar.",
+    iniSocial: "Ver a iniciativa",
+    iniEditTitle: "Iniciativa civil",
+    f_iniCategoria: "Tipo de iniciativa",
+    f_iniCategoriaHint: "Ex.: Brigada de escombros, Apoio psicológico, Ponto de água, Resgate animal.",
+    f_iniDesc: "O que fazem",
+    f_iniAyuda: "Como as pessoas podem ajudar",
+    f_iniAyudaHint: "Marque todas as formas de apoio que recebem. Aparecem como opções na ficha.",
+    f_iniSocial: "Link público (grupo, Instagram, formulário)",
     refNeedBar: "{n} centros precisam de ajuda",
-    refListTitle: "Abrigos e arrecadação · como colaborar",
-    refListSub: "Necessidades reportadas por abrigos e pontos de arrecadação. Colabore como puder, onde puder: leve o que precisam, ou compartilhe para alcançar mais gente.",
+    refListTitle: "Abrigos, arrecadação e iniciativas · como colaborar",
+    refListSub: "Necessidades reportadas por abrigos, pontos de arrecadação e iniciativas civis. Colabore como puder, onde puder: leve o que precisam, ou compartilhe para alcançar mais gente.",
     refListEmpty: "Ainda não há necessidades reportadas. Volte em breve.",
     refShareCta: "Compartilhar necessidade",
     refShareTag: "Colabore como puder, onde puder · HelpMap VE",

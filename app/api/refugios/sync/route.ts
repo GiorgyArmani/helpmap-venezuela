@@ -5,6 +5,7 @@ import {
   derivePlace,
   fetchAcopioCentros,
   mapCentro,
+  normalizeEstado,
   type AcopioCentro,
   type AcopioTipo,
   type MappedLocation,
@@ -53,19 +54,31 @@ async function runSync() {
 
   // Existing refugios keyed by external_id, plus every used location_id (to mint unique
   // ids for genuinely-new refugios without colliding).
-  const { data: existing, error: exErr } = await admin
-    .from("refugios")
-    .select("location_id, external_id, updated_at");
-  if (exErr) throw new Error("refugios_read: " + exErr.message);
-  const byExt = new Map<string, { location_id: string; updated_at: string | null }>();
+  // `estado` is read too: a row that has none yet must be refreshed even when
+  // freshest-wins would skip it (see the backfill note below). Tolerates the column not
+  // existing yet (db/refugios_estado.sql not run) by retrying without it.
+  let existing: Array<{ location_id: string; external_id: string | null; updated_at: string | null; estado?: string | null }> | null = null;
+  const first = await admin.from("refugios").select("location_id, external_id, updated_at, estado");
+  const hasEstado = !first.error;
+  if (first.error) {
+    const retry = await admin.from("refugios").select("location_id, external_id, updated_at");
+    if (retry.error) throw new Error("refugios_read: " + retry.error.message);
+    existing = retry.data;
+  } else {
+    existing = first.data;
+  }
+  const byExt = new Map<string, { location_id: string; updated_at: string | null; estado: string | null }>();
   const usedIds = new Set<string>();
   for (const r of existing ?? []) {
-    if (r.external_id) byExt.set(r.external_id, { location_id: r.location_id, updated_at: r.updated_at });
+    if (r.external_id)
+      byExt.set(r.external_id, { location_id: r.location_id, updated_at: r.updated_at, estado: r.estado ?? null });
     usedIds.add(r.location_id);
   }
 
   const locUpserts: MappedLocation[] = [];
   const refUpserts: MappedRefugio[] = [];
+  // estado-only patches for rows freshest-wins skips (see below).
+  const estadoPatches: Array<{ location_id: string; estado: string }> = [];
   // Centers whose location row actually changed (insert or fresh update) — mirrored to
   // n8n after the DB write so the intake LISTS dropdown + dedup alias/loc maps stay in
   // sync with AcopioVE (CLAUDE.md §13 feedback loop, same contract as /api/centers).
@@ -94,7 +107,14 @@ async function runSync() {
     if (ex) {
       const cur = ex.updated_at ? Date.parse(ex.updated_at) : 0;
       if (src <= cur) {
-        skipped++; // freshest-wins: our copy is same or newer (likely a local staff edit)
+        // Freshest-wins says skip (our copy is same or newer — likely a local staff edit),
+        // BUT if we hold no `estado` for this row we'd never learn it is closed: upstream
+        // won't bump updated_at just because we added the column. So patch estado alone —
+        // a targeted upsert of {location_id, estado} touches no other field and does not
+        // move updated_at, leaving the freshest-wins clock intact.
+        const est = normalizeEstado(it.estado);
+        if (hasEstado && est && !ex.estado) estadoPatches.push({ location_id: ex.location_id, estado: est });
+        skipped++;
         continue;
       }
       const m = mapCentro(it, ex.location_id, tipo);
@@ -116,6 +136,10 @@ async function runSync() {
     }
   }
 
+  // Strip `estado` from the full upserts if the column isn't there yet (migration not
+  // run) — otherwise every row in the batch would fail on an unknown column.
+  if (!hasEstado) for (const r of refUpserts) delete (r as Partial<MappedRefugio>).estado;
+
   if (locUpserts.length) {
     // locations first (refugios FK-references it). aliases is intentionally omitted so a
     // sync never wipes staff-curated aliases on an existing row (relies on its DB default
@@ -124,6 +148,15 @@ async function runSync() {
     if (e1) throw new Error("locations_upsert: " + e1.message);
     const { error: e2 } = await admin.from("refugios").upsert(refUpserts, { onConflict: "location_id" });
     if (e2) throw new Error("refugios_upsert: " + e2.message);
+  }
+
+  // Estado backfill, applied separately so it can never overwrite a staff edit: this
+  // payload names ONLY location_id + estado, so the ON CONFLICT update sets just estado.
+  let estadoFilled = 0;
+  if (estadoPatches.length) {
+    const { error: e3 } = await admin.from("refugios").upsert(estadoPatches, { onConflict: "location_id" });
+    if (e3) throw new Error("refugios_estado_upsert: " + e3.message);
+    estadoFilled = estadoPatches.length;
   }
 
   const notified = await notifyCenters(notify);
@@ -137,6 +170,8 @@ async function runSync() {
     inserted,
     updated,
     skipped,
+    estadoFilled, // rows that only gained their operating status (abierto/lleno/cerrado)
+    estadoColumn: hasEstado, // false → run db/refugios_estado.sql
     notified,
   };
 }

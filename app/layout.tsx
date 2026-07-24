@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-T75QMEHWTP";
 
 const DESCRIPTION =
-  "Base de datos verificada de personas afectadas por el terremoto en la región central de Venezuela, en constante actualización por personal médico en campo.";
+  "Consulta personas afectadas, refugios, centros de acopio y sus necesidades en un solo lugar durante una emergencia. Reunimos información actualizada para facilitar la búsqueda y llevar la ayuda donde más se necesita.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.helpmapvzla.net"),

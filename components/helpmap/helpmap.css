@@ -138,8 +138,6 @@ body{margin:0;background:#fff}
 .hctx span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hctx i{font-style:normal;cursor:pointer;color:var(--mut);font-size:0.75rem;flex:0 0 auto}
 .hfresh{font-size:0.6875rem;color:var(--mut);width:100%;text-align:left}
-.hchev{width:18px;height:18px;color:var(--mut);transition:transform .22s;flex:0 0 auto}
-.hchev-up{transform:rotate(180deg)}
 .list{flex:1;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom)}
 .card{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#fff;border:none;border-bottom:1px solid var(--line);padding:13px 15px;cursor:pointer}
 .av{width:44px;height:44px;border-radius:50%;background:var(--soft2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:0.9375rem;flex:0 0 auto;overflow:hidden}
@@ -225,6 +223,14 @@ body{margin:0;background:#fff}
 .tgt{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:13px;padding:13px;font-size:0.8125rem;font-weight:600;cursor:pointer;background:#fff;color:var(--ink)}
 .ti{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.6875rem;font-weight:700;flex:0 0 auto}
 .ti-wa{background:#25d366}.ti-tg{background:#229ed9}.ti-ig{background:#e1306c}.ti-cp{background:var(--accent)}
+/* Instagram canvas picker (story 9:16 / post 4:5 / square 1:1), revealed by the
+   single "Instagram" target. The rectangle previews the ratio at a glance. */
+.igpick{display:flex;flex-direction:column;gap:10px;margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:13px;background:#fff}
+.igpick-t{font-size:0.6875rem;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--mut)}
+.igpick-row{display:flex;gap:8px}
+.igpick-b{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;border:1px solid var(--line);border-radius:11px;padding:12px 6px;font-size:0.75rem;font-weight:600;background:#fff;color:var(--ink);cursor:pointer;font-family:inherit;text-align:center;line-height:1.25}
+.igpick-b:hover{border-color:#e1306c}
+.igpick-r{display:block;border-radius:3px;background:linear-gradient(140deg,#e1306c,#f77737);flex:0 0 auto}
 .form{display:flex;flex-direction:column;gap:15px}
 .fld{display:flex;flex-direction:column;gap:6px}
 .flabel{font-size:0.75rem;font-weight:600;color:var(--mut)}
@@ -551,6 +557,29 @@ body{margin:0;background:#fff}
 .refitem-place svg{width:13px;height:13px;color:#9ca3af}
 .refitem-acts{display:flex;flex-wrap:wrap;gap:8px}
 .refitem-acts .btnp,.refitem-acts .btng{flex:1;min-width:120px;padding:12px}
+/* civic-initiative bits (type=iniciativa) — rose accent inside the amber "help point"
+   card chrome, so an initiative reads as its own thing without a second card design */
+.inicat{flex:0 0 auto;font-size:0.6563rem;font-weight:800;color:#9d174d;background:#fce7f3;border:1px solid #fbcfe8;border-radius:8px;padding:3px 8px}
+.inichip{color:#9d174d;background:#fdf2f8;border-color:#fbcfe8}
+.refitem-type{display:inline-flex;align-items:center;gap:4px;font-size:0.6563rem;font-weight:800;letter-spacing:.02em;text-transform:uppercase}
+.refitem-type svg{width:12px;height:12px;color:currentColor}
+/* ---- Operating status + data freshness (AcopioVE parity: some points already closed,
+   and a card that doesn't say WHEN it was updated is a card you can't trust) ---- */
+.estbadge{flex:0 0 auto;font-size:0.6563rem;font-weight:800;letter-spacing:.02em;text-transform:uppercase;border-radius:999px;padding:3px 9px;border:1px solid transparent}
+.est-open{color:#065f46;background:#d1fae5;border-color:#a7f3d0}
+.est-full{color:#92400e;background:#fef3c7;border-color:#fcd34d}
+.est-closed{color:#7f1d1d;background:#fee2e2;border-color:#fecaca}
+.refupd{display:inline-flex;align-items:center;gap:5px}
+.refupd svg{width:12px;height:12px;color:currentColor}
+.refupd-old{color:#b45309;font-weight:700}
+.refwarn{margin:0;font-size:0.7813rem;line-height:1.4;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:11px;padding:9px 11px}
+.refwarn-closed{color:#991b1b;background:#fee2e2;border-color:#fca5a5}
+.refwarn-soft{font-weight:600;color:#6b5416;background:#fffaeb;border-color:#f2e6c4}
+.refitem-foot{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:0.6563rem;color:#9a8748}
+/* "cómo puede ayudar la gente" multi-select in the staff center form */
+.inipick{display:flex;flex-wrap:wrap;gap:8px}
+.inipickb{font-family:inherit;font-size:0.7813rem;font-weight:700;color:#4b5563;background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 13px;cursor:pointer}
+.inipickb-on{color:#9d174d;background:#fdf2f8;border-color:#f9a8d4}
 /* CC-BY 4.0 attribution for AcopioVE data (license requirement) */
 .refattrib{display:inline-block;font-size:0.6563rem;color:#9a8748;text-decoration:none}
 .refattrib:hover{text-decoration:underline}
@@ -621,3 +650,30 @@ textarea.finput{resize:vertical;min-height:96px;font-family:inherit;line-height:
 .cfm-cancel{flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 20px;font-size:0.875rem;font-weight:600;color:var(--ink);cursor:pointer;font-family:inherit}
 .cfm-ok{flex:1;background:var(--ok);color:#fff;border:none;border-radius:13px;padding:14px;font-size:0.9063rem;font-weight:700;cursor:pointer;font-family:inherit}
 @media(min-width:520px){.cfmwrap{align-items:center}.cfm{border-radius:20px}}
+
+/* ---------------------------------------------------------------------------
+   Folded sheet — collapse the whole list to its handle strip so the map can be
+   used on its own. Placed LAST on purpose: `.sheet.sheet-min` (0,2,0) has to beat
+   `.sheet:not(.sheet-open)` (also 0,2,0) inside the ≥768px block above, and only
+   source order decides between equal specificities.
+   Height is `auto`, not a fixed px value, so the strip can never clip the count
+   row at a larger font size — the trade-off is that folding doesn't animate
+   (browsers can't transition to/from `auto`).
+--------------------------------------------------------------------------- */
+.hfold{position:absolute;top:8px;right:8px;z-index:2;display:flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0;border:none;border-radius:10px;background:transparent;color:var(--mut);cursor:pointer}
+.hfold:hover{background:var(--soft);color:var(--ink)}
+.hfold:focus-visible{outline:2px solid var(--adm);outline-offset:2px}
+.hfold svg{width:18px;height:18px}
+.sheet.sheet-min{height:auto}
+.sheet.sheet-min .list,.sheet.sheet-min .hfresh{display:none}
+/* The handle stays tappable as the way back, so keep room for the fold button. */
+.sheet.sheet-min .handle{padding-bottom:calc(9px + env(safe-area-inset-bottom))}
+/* Always reserve the fold button's corner: with a center selected the header row is
+   count + name chip + chevron, which on a 360px phone would otherwise run under it. */
+.hrow2{padding-right:34px}
+/* Phones only: the FAB is parked above the un-folded sheet (bottom:248px), which
+   would leave it floating over empty map once the sheet is a strip. Desktop keeps
+   its own bottom-right stack (the sheet is a side panel there, not a bottom sheet). */
+@media (max-width:767px){
+  .sheetmin .fabwrap{bottom:calc(84px + env(safe-area-inset-bottom))}
+}

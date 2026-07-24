@@ -6,7 +6,7 @@
 
 import { useAdmin } from "./AdminContext";
 import { ICON } from "./icons";
-import { SM, STATE_LABEL, TYPE_META } from "./data";
+import { AYUDA_META, AYUDA_ORDER, ESTADO_META, ESTADO_ORDER, SM, STATE_LABEL, TYPE_META } from "./data";
 import type { LocationType, VzlaState } from "./data";
 import { AUDIT_LABEL, VOL_PROFILES } from "./constants";
 import { timeAgo, localeOf } from "./helpers";
@@ -781,11 +781,96 @@ export default function AdminPanel() {
                       {t.geoPickMap}
                     </button>
                     <span className="fhint">{t.geoPickHint}</span>
+                    {/* Civic initiative: what it is, what it does and — the point of the
+                        type — the ways to help that are NOT money (db/iniciativas.sql). */}
+                    {draft?.type === "iniciativa" && (
+                      <div className="refedit">
+                        <span className="refedit-h">{t.iniEditTitle}</span>
+                        <div className="fld">
+                          <span className="flabel">{t.f_iniCategoria}</span>
+                          <input
+                            className="finput"
+                            value={draft?.ini_categoria || ""}
+                            onChange={setD("ini_categoria")}
+                            placeholder={t.f_iniCategoria}
+                          />
+                          <span className="fhint">{t.f_iniCategoriaHint}</span>
+                        </div>
+                        <div className="fld">
+                          <span className="flabel">{t.f_iniDesc}</span>
+                          <textarea
+                            className="finput"
+                            rows={3}
+                            value={draft?.ini_desc || ""}
+                            onChange={(e) => setDraft((d) => ({ ...(d || {}), ini_desc: e.target.value }))}
+                            placeholder={t.f_iniDesc}
+                          />
+                        </div>
+                        <div className="fld">
+                          <span className="flabel">{t.f_iniAyuda}</span>
+                          <div className="inipick">
+                            {AYUDA_ORDER.map((k) => {
+                              const on = (draft?.ini_ayuda || []).includes(k);
+                              return (
+                                <button
+                                  key={k}
+                                  type="button"
+                                  className={"inipickb " + (on ? "inipickb-on" : "")}
+                                  onClick={() =>
+                                    setDraft((d) => {
+                                      const cur = d?.ini_ayuda || [];
+                                      return { ...(d || {}), ini_ayuda: on ? cur.filter((x) => x !== k) : [...cur, k] };
+                                    })
+                                  }
+                                >
+                                  {AYUDA_META[k][lang]}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <span className="fhint">{t.f_iniAyudaHint}</span>
+                        </div>
+                        <div className="fld">
+                          <span className="flabel">{t.f_iniSocial}</span>
+                          <input
+                            className="finput"
+                            value={draft?.ini_social || ""}
+                            onChange={setD("ini_social")}
+                            placeholder="https://"
+                          />
+                        </div>
+                      </div>
+                    )}
                     {/* Refugio/acopio needs: for shelters AND puntos de acopio. Editable
-                        by staff so each center's differing needs stay current (AcopioVE, §14). */}
-                    {(draft?.type === "shelter" || draft?.type === "donation_centre") && (
+                        by staff so each center's differing needs stay current (AcopioVE, §14).
+                        Iniciativas reuse the same companion row, so they get it too. */}
+                    {(draft?.type === "shelter" || draft?.type === "donation_centre" || draft?.type === "iniciativa") && (
                       <div className="refedit">
                         <span className="refedit-h">{t.refEditTitle}</span>
+                        {/* Operating status FIRST: whether the point still exists matters
+                            more than what it needs. Blank = sin dato (we never default a
+                            point to "abierto" — AcopioVE already lists closed ones). */}
+                        <div className="fld">
+                          <span className="flabel">{t.f_refEstado}</span>
+                          <div className="seg">
+                            <button
+                              className={"segb " + (!draft?.ref_estado ? "segb-on" : "")}
+                              onClick={setDV("ref_estado", "")}
+                            >
+                              {t.f_refEstadoUnknown}
+                            </button>
+                            {ESTADO_ORDER.map((k) => (
+                              <button
+                                key={k}
+                                className={"segb " + (draft?.ref_estado === k ? "segb-on" : "")}
+                                onClick={setDV("ref_estado", k)}
+                              >
+                                {ESTADO_META[k][lang]}
+                              </button>
+                            ))}
+                          </div>
+                          <span className="fhint">{t.f_refEstadoHint}</span>
+                        </div>
                         <div className="fld">
                           <span className="flabel">{t.f_refNecesita}</span>
                           <textarea
@@ -819,6 +904,10 @@ export default function AdminPanel() {
                           <span className="flabel">{t.f_refAddress}</span>
                           <input className="finput" value={draft?.ref_address || ""} onChange={setD("ref_address")} placeholder={t.f_refAddress} />
                         </div>
+                        {/* "Is it an animal shelter?" only makes sense for a refugio.
+                            Conditionally rendered, not [hidden]: .fld sets display:flex,
+                            which as an author rule beats the UA [hidden]{display:none}. */}
+                        {draft?.type !== "iniciativa" && (
                         <div className="fld">
                           <span className="flabel">{t.f_refAnimal}</span>
                           <div className="seg">
@@ -830,6 +919,7 @@ export default function AdminPanel() {
                             </button>
                           </div>
                         </div>
+                        )}
                       </div>
                     )}
                     <div className="ebtns">

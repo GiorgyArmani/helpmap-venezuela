@@ -1,7 +1,7 @@
 // Local UI types for the HelpMap component tree. Domain types (Location, PatientPublic,
 // Refugio, …) live in ./data; these are view/admin/draft shapes specific to the UI.
 
-import type { Estatus, LocationType, Sexo, VzlaState } from "./data";
+import type { Estatus, LocationType, RefugioEstado, Sexo, VzlaState } from "./data";
 
 // Which full-screen overlay (if any) is open.
 export type View =
@@ -93,6 +93,12 @@ export interface Draft {
   ref_responsable?: string;
   ref_address?: string;
   ref_animal?: boolean;
+  ref_estado?: "" | RefugioEstado; // "" = sin dato (never stored as "abierto" by default)
+  // civic initiative (type=iniciativa) — same companion row, extra fields
+  ini_categoria?: string;
+  ini_desc?: string;
+  ini_ayuda?: string[];
+  ini_social?: string;
 }
 
 export interface AuthUser {

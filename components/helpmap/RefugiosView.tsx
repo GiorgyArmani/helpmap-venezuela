@@ -1,16 +1,22 @@
-import { ICON } from "./icons";
+import { ICON, TYPE_ICON } from "./icons";
 import { mapsDirectionsUrl } from "./share";
-import { STATE_LABEL, type Location, type Refugio, type Strings } from "./data";
+import { EstadoBadge, RefugioStatusNote, UpdatedLine } from "./RefugioStatus";
+import { ayudaKeys } from "./helpers";
+import { AYUDA_META, STATE_LABEL, TYPE_META, type Lang, type Location, type Refugio, type Strings } from "./data";
 
-// "Refugios · cómo colaborar" needs list — surfaces every refugio that reported a need so
-// people can act (visibilizar necesidades). Presentational; needs come in as props.
+// "Refugios · cómo colaborar" needs list — surfaces every place that reported a need so
+// people can act (visibilizar necesidades). Presentational; needs come in as props. The
+// list mixes refugios, puntos de acopio AND civic initiatives, so each row is labelled
+// with its type.
 export function RefugiosView({
   t,
+  lang,
   refugioNeeds,
   onShare,
   onClose,
 }: {
   t: Strings;
+  lang: Lang;
   refugioNeeds: { r: Refugio; loc: Location }[];
   onShare: (loc: Location, r: Refugio) => void;
   onClose: () => void;
@@ -34,13 +40,32 @@ export function RefugiosView({
             <div className="refitem-h">
               <span className="refitem-name">
                 {loc.canonical_name}
+                <EstadoBadge r={r} lang={lang} />
                 {r.es_animal && <span className="refanimal">{t.refAnimal}</span>}
               </span>
               <span className="refitem-place">
+                <span className="refitem-type" style={{ color: TYPE_META[loc.type].color }}>
+                  {TYPE_ICON[loc.type]}
+                  {r.categoria || TYPE_META[loc.type][lang]}
+                </span>
                 {ICON.pin}
                 {[loc.municipality, STATE_LABEL[loc.state]].filter(Boolean).join(" · ")}
               </span>
             </div>
+            {/* "Lleno" / stale warning. A `cerrado` point never reaches this list (it is
+                filtered out upstream) — it's not asking for donations. */}
+            <RefugioStatusNote r={r} t={t} />
+            {r.descripcion && <p className="refneedtxt">{r.descripcion}</p>}
+            {ayudaKeys(r.ayuda).length > 0 && (
+              <div className="refblock">
+                <span className="reflabel">{ICON.volunteer}{t.iniHelpWays}</span>
+                <div className="refchips">
+                  {ayudaKeys(r.ayuda).map((k) => (
+                    <span key={k} className="refchip inichip">{AYUDA_META[k][lang]}</span>
+                  ))}
+                </div>
+              </div>
+            )}
             {r.necesita && (
               <div className="refneed">
                 <span className="reflabel">{ICON.volunteer}{t.refNeeds}</span>
@@ -83,9 +108,14 @@ export function RefugiosView({
                 {t.refShareCta}
               </button>
             </div>
+            <div className="refitem-foot">
+              <UpdatedLine r={r} t={t} lang={lang} />
+            </div>
           </div>
         ))}
-        {refugioNeeds.length > 0 && (
+        {/* CC-BY 4.0 attribution — only when the list actually contains AcopioVE rows
+            (external_id). Iniciativas and hand-added centers are our own data. */}
+        {refugioNeeds.some(({ r }) => r.external_id) && (
           <a className="refattrib refattrib-foot" href="https://acopiove.org" target="_blank" rel="noopener noreferrer">
             {t.refAttrib}
           </a>

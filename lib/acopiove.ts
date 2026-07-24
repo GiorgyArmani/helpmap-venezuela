@@ -39,6 +39,21 @@ export interface AcopioCentro {
 // AcopioVE centro tipo → the HelpMap location type it maps to.
 export type AcopioTipo = "refugio" | "acopio";
 
+// Operating status, AcopioVE's vocabulary (their /submissions schema enumerates
+// abierto|lleno|cerrado; the live /centros feed returns "abierto"/"cerrado" today).
+// NULL = unknown — never default an unverified centro to "abierto": telling someone a
+// closed point is open is the failure that actually hurts.
+export type RefugioEstado = "abierto" | "lleno" | "cerrado";
+
+export function normalizeEstado(raw: string | null | undefined): RefugioEstado | null {
+  const v = norm(String(raw ?? "")).trim();
+  if (!v) return null;
+  if (/^(abierto|activo|open|active|operativo)/.test(v)) return "abierto";
+  if (/^(lleno|full|completo|sin cupo)/.test(v)) return "lleno";
+  if (/^(cerrado|closed|inactivo|clausurado)/.test(v)) return "cerrado";
+  return null; // unrecognized → unknown, not a guess
+}
+
 export interface MappedLocation {
   location_id: string;
   canonical_name: string;
@@ -61,6 +76,7 @@ export interface MappedRefugio {
   address: string | null;
   external_id: string;
   es_animal: boolean;
+  estado: RefugioEstado | null; // abierto | lleno | cerrado (null = upstream didn't say)
   updated_at: string; // = AcopioVE's updated_at, so freshest-wins compares apples to apples
 }
 
@@ -227,6 +243,7 @@ export function mapCentro(
       address: it.address,
       external_id: it.id,
       es_animal: !isAcopio && /^\s*\[animales\]/i.test(it.name),
+      estado: normalizeEstado(it.estado),
       updated_at: it.updated_at || new Date().toISOString(),
     },
   };

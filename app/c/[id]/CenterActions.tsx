@@ -5,12 +5,14 @@ import Link from "next/link";
 import {
   centerUrl,
   copyText,
+  IG_FORMATS,
   mapsDirectionsUrl,
   nativeShare,
   openShare,
   shareCenterStoryImage,
   telegramUrl,
   whatsappUrl,
+  type ShareFormat,
 } from "@/components/helpmap/share";
 
 export default function CenterActions({
@@ -35,7 +37,9 @@ export default function CenterActions({
   phone: string | null;
 }) {
   const [toast, setToast] = useState("");
-  const [building, setBuilding] = useState(false);
+  const [building, setBuilding] = useState<ShareFormat | null>(null);
+  // One "Instagram" button → picks the canvas (story 9:16 / post 4:5 / square 1:1).
+  const [igPick, setIgPick] = useState(false);
   const url = centerUrl(id);
   // The need is the message — links to the shareable center page (renders an OG card).
   const text =
@@ -60,14 +64,23 @@ export default function CenterActions({
     flash(copied ? "Enlace copiado" : "No se pudo copiar");
   };
 
-  const shareStory = async () => {
+  // Three canvases: 1080×1920 for a story, 1080×1350 (4:5) / 1080×1080 for a feed post
+  // — a story image gets cropped in the feed (lib/ogFormat.ts).
+  const shareStory = async (fmt: ShareFormat) => {
     if (building) return;
-    setBuilding(true);
-    const r = await shareCenterStoryImage(id, name);
-    if (r === "shared") flash("Comparte la imagen en tu historia y agrega el sticker de enlace.");
-    else if (r === "downloaded") flash("Abrimos la imagen en otra pestaña: guárdala y súbela a tu historia.");
+    setIgPick(false);
+    setBuilding(fmt);
+    const r = await shareCenterStoryImage(id, name, fmt);
+    const where = fmt === "story" ? "historia" : "publicación";
+    if (r === "shared")
+      flash(
+        fmt === "story"
+          ? "Comparte la imagen en tu historia y agrega el sticker de enlace."
+          : "Elige Instagram → Publicación y pega el enlace en la descripción."
+      );
+    else if (r === "downloaded") flash(`Abrimos la imagen en otra pestaña: guárdala y súbela como ${where}.`);
     else flash("No se pudo crear la imagen. Intenta de nuevo.");
-    setBuilding(false);
+    setBuilding(null);
   };
 
   const waDigits = whatsapp ? whatsapp.replace(/[^0-9]/g, "") : "";
@@ -107,9 +120,9 @@ export default function CenterActions({
         <button style={S.t} onClick={() => openShare(telegramUrl(url, text))}>
           <span style={{ ...S.ti, background: "#229ed9" }}>TG</span>Telegram
         </button>
-        <button style={S.t} onClick={shareStory} disabled={building}>
+        <button style={S.t} onClick={() => setIgPick((v) => !v)} disabled={!!building} aria-expanded={igPick}>
           <span style={{ ...S.ti, background: "#e1306c" }}>IG</span>
-          {building ? "Creando…" : "Historia IG"}
+          {building ? "Creando…" : "Instagram"}
         </button>
         <button
           style={S.t}
@@ -121,6 +134,19 @@ export default function CenterActions({
           <span style={{ ...S.ti, background: "#15181d" }}>↗</span>Copiar enlace
         </button>
       </div>
+      {igPick && (
+        <div style={S.pick}>
+          <div style={S.pickLabel}>ELIGE EL FORMATO</div>
+          <div style={S.pickRow}>
+            {IG_FORMATS.map((f) => (
+              <button key={f.fmt} style={S.pickBtn} onClick={() => shareStory(f.fmt)}>
+                <span style={{ ...S.pickRatio, width: f.w, height: f.h }} />
+                {f.es}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <a style={{ ...S.btn, ...S.directions }} href={mapsDirectionsUrl(lat, lng)} target="_blank" rel="noopener noreferrer">
         📍 Cómo llegar
       </a>
@@ -144,6 +170,11 @@ const S: Record<string, React.CSSProperties> = {
   grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 },
   t: { display: "flex", alignItems: "center", gap: 10, border: "1px solid #ebecef", borderRadius: 13, padding: 13, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "#fff", color: "#16191f", fontFamily: "inherit" },
   ti: { width: 30, height: 30, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, flex: "0 0 auto" },
+  pick: { marginTop: 10, padding: 12, border: "1px solid #ebecef", borderRadius: 13, background: "#fff" },
+  pickLabel: { fontSize: 10.5, letterSpacing: ".6px", fontWeight: 700, color: "#7b818c", marginBottom: 10 },
+  pickRow: { display: "flex", gap: 8 },
+  pickBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, border: "1px solid #ebecef", borderRadius: 11, padding: "12px 6px", fontSize: 12, fontWeight: 600, background: "#fff", color: "#16191f", cursor: "pointer", fontFamily: "inherit", lineHeight: 1.25, textAlign: "center" },
+  pickRatio: { display: "block", borderRadius: 3, background: "linear-gradient(140deg,#e1306c,#f77737)", flex: "0 0 auto" },
   back: { display: "block", width: "100%", textAlign: "center", marginTop: 16, fontSize: 13, color: "#7b818c", textDecoration: "none" },
   toast: { position: "fixed", left: "50%", bottom: 28, transform: "translateX(-50%)", background: "#15181d", color: "#fff", fontSize: 13, fontWeight: 600, padding: "12px 18px", borderRadius: 12, boxShadow: "0 8px 26px rgba(16,20,28,.34)", zIndex: 50, maxWidth: "calc(100vw - 28px)", textAlign: "center", lineHeight: 1.35 },
 };

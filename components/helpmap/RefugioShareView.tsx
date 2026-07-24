@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { ICON } from "./icons";
+import { IgPicker } from "./IgPicker";
+import { type ShareFormat } from "./share";
 import { STATE_LABEL, TYPE_META, type Lang, type Location, type Refugio, type Strings } from "./data";
 
 // Share overlay for a help point (refugio / centro de acopio) — the same preview-card +
@@ -16,9 +19,11 @@ export function RefugioShareView({
   lang: Lang;
   loc: Location;
   refugio: Refugio;
-  onShareTo: (target: "wa" | "tg" | "ig" | "copy") => void;
+  onShareTo: (target: "wa" | "tg" | "ig" | "copy", fmt?: ShareFormat) => void;
   onBack: () => void;
 }) {
+  // One "Instagram" button → the canvas picker (story / post / square).
+  const [igPick, setIgPick] = useState(false);
   const typeLabel = TYPE_META[loc.type][lang];
   const place = [loc.municipality, STATE_LABEL[loc.state]].filter(Boolean).join(" · ");
   const sub = refugio.necesita?.trim() || place;
@@ -61,7 +66,7 @@ export function RefugioShareView({
           <button className="tgt" onClick={() => onShareTo("tg")}>
             <span className="ti ti-tg">TG</span>Telegram
           </button>
-          <button className="tgt" onClick={() => onShareTo("ig")}>
+          <button className="tgt" onClick={() => setIgPick((v) => !v)} aria-expanded={igPick}>
             <span className="ti ti-ig">IG</span>Instagram
           </button>
           <button className="tgt" onClick={() => onShareTo("copy")}>
@@ -69,6 +74,7 @@ export function RefugioShareView({
             {t.copyLink}
           </button>
         </div>
+        {igPick && <IgPicker t={t} onPick={(fmt) => onShareTo("ig", fmt)} />}
         <a className="share-disc" href="https://acopiove.org" target="_blank" rel="noopener noreferrer">
           {ICON.check}
           {t.refAttrib}

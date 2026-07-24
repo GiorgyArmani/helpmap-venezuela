@@ -1,8 +1,44 @@
 // Pure helpers for the HelpMap UI: relative time, Nominatim address → our enums, and
 // avatar initials. No React, no side effects — safe to import anywhere.
 
-import { norm, type Lang, type VzlaState } from "./data";
+import { AYUDA_ORDER, ESTADO_META, norm, type AyudaKey, type Lang, type Refugio, type RefugioEstado, type VzlaState } from "./data";
 import type { PersonLike } from "./types";
+
+// Operating status of a help point, narrowed to what the UI can render. Anything we
+// don't recognize (or a row from before db/refugios_estado.sql) is UNKNOWN → no badge.
+// Deliberately never falls back to "abierto": claiming a closed point is open is the
+// error that sends a family to a shut door.
+export function estadoOf(r?: Refugio | null): RefugioEstado | null {
+  const v = r?.estado;
+  return v && v in ESTADO_META ? (v as RefugioEstado) : null;
+}
+
+// A refugio/acopio the app should still present as active help. `cerrado` is excluded
+// from the "N puntos necesitan ayuda" bar and list — a closed point doesn't need
+// donations, and listing it there wastes a trip.
+export const isOpenPoint = (r?: Refugio | null) => estadoOf(r) !== "cerrado";
+
+// How stale the record is, in days (null when we have no timestamp at all). Drives the
+// "confirma antes de ir" hint — AcopioVE shows the same thing ("Actualizado hace 28 días")
+// because in an emergency the AGE of the data is part of the data.
+export function refugioAgeDays(r?: Refugio | null): number | null {
+  const iso = r?.updated_at || r?.last_confirmed_at;
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!isFinite(ms)) return null;
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
+// Beyond this the card asks the user to phone ahead before travelling.
+export const REFUGIO_STALE_DAYS = 10;
+
+// `refugios.ayuda` is a free text[] in Postgres (so a new way to help never needs a
+// migration). Narrow it to the keys the UI can actually render, in AYUDA_ORDER — an
+// unrecognized value is dropped rather than painted as a blank chip.
+export function ayudaKeys(ayuda?: string[] | null): AyudaKey[] {
+  if (!ayuda?.length) return [];
+  return AYUDA_ORDER.filter((k) => ayuda.includes(k));
+}
 
 // Compact relative time ("hace 5 min"). App-runtime only (Date is fine here).
 export function timeAgo(iso: string, lang: Lang): string {

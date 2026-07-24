@@ -89,11 +89,11 @@ const I = {
 const SLIDES: Slide[] = [
   {
     eyebrow: { es: "Bienvenido", en: "Welcome", pt: "Bem-vindo" },
-    title: { es: "Encuentra a tus seres queridos", en: "Find your loved ones", pt: "Encontre seus entes queridos" },
+    title: { es: "Información para emergencias", en: "Information for emergencies", pt: "Informação para emergências" },
     body: {
-      es: "Base de datos verificada de personas afectadas por los terremotos del 24 de Junio 2026, en constante actualización por personal médico en campo. Te ayuda a ubicar a tus familiares.",
-      en: "A verified database of people affected by the June 24, 2026 earthquakes, continuously updated by medical staff in the field. It helps you locate your family.",
-      pt: "Base de dados verificada de pessoas afetadas pelos terremotos de 24 de junho de 2026, atualizada constantemente por profissionais de saúde em campo. Ajuda você a localizar seus familiares.",
+      es: "Consulta personas afectadas, refugios, centros de acopio y sus necesidades en un solo lugar durante una emergencia. Reunimos información actualizada para facilitar la búsqueda y llevar la ayuda donde más se necesita.",
+      en: "Look up affected people, shelters, collection centers and their needs in one place during an emergency. We gather up-to-date information to make searching easier and to get help where it's needed most.",
+      pt: "Consulte pessoas afetadas, abrigos, centros de arrecadação e suas necessidades em um só lugar durante uma emergência. Reunimos informações atualizadas para facilitar a busca e levar a ajuda onde mais se precisa.",
     },
   },
   {

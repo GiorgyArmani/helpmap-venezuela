@@ -18,13 +18,16 @@ import type { Draft, EditType } from "./types";
 
 // Different types that cluster over the same metro area would otherwise stack on nearly the
 // same pixel. We fan each type out in a fixed direction by a few px so all — and their count
-// badges — stay visible. Order matches TYPE_META (hospital, shelter, morgue, donation, comedor).
+// badges — stay visible. Order matches TYPE_META (hospital, shelter, morgue, donation, comedor,
+// iniciativa). Positions sit on one arc, y = -18 + 14·(x/50)² — widened from 5 slots to 6 when
+// civic initiatives were added, so the spread stays symmetric around the cluster's real point.
 const CLUSTER_FAN: Record<LocationType, [number, number]> = {
-  hospital: [-40, -4],
-  shelter: [-20, -14],
-  morgue: [0, -18],
-  donation_centre: [20, -14],
-  comedor: [40, -4],
+  hospital: [-50, -4],
+  shelter: [-30, -13],
+  morgue: [-10, -17],
+  donation_centre: [10, -17],
+  comedor: [30, -13],
+  iniciativa: [50, -4],
 };
 
 // Builds a per-type cluster badge: a location pin tinted with the type color, the type icon in

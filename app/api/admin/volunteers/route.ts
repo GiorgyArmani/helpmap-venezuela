@@ -45,7 +45,7 @@ async function provisionVolunteer(admin: AdminClient, email: string, password: s
     await admin.auth.admin.deleteUser(created.user.id);
     return { ok: false as const, status: 400, error: "role_failed", detail: roleErr.message };
   }
-  const emailed = await sendVolunteerWelcome(email, password, SITE_URL);
+  const emailed = await sendVolunteerWelcome({ to: email, siteUrl: SITE_URL, tempPassword: password });
   return { ok: true as const, user_id: created.user.id, emailed };
 }
 
@@ -92,7 +92,7 @@ export async function PATCH(request: Request) {
   const admin = createAdminClient();
   const { data: req, error: getErr } = await admin
     .from("volunteer_requests")
-    .select("id, user_id, status")
+    .select("id, user_id, status, email, nombre")
     .eq("id", body.id)
     .maybeSingle();
   if (getErr || !req) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -117,7 +117,19 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "role_failed", detail: roleErr.message }, { status: 400 });
   }
   await admin.from("volunteer_requests").update({ status: "approved", ...reviewed }).eq("id", req.id);
-  return NextResponse.json({ ok: true, status: "approved" });
+
+  // Welcome + manuals. They already know their password (they set it at signup), so no
+  // credentials go in this mail. Best-effort: the role row is what grants access, and a
+  // mail failure must never make an approved volunteer look rejected.
+  let emailed = false;
+  if (req.email) {
+    emailed = await sendVolunteerWelcome({
+      to: req.email as string,
+      siteUrl: SITE_URL,
+      name: (req.nombre as string) || undefined,
+    }).catch(() => false);
+  }
+  return NextResponse.json({ ok: true, status: "approved", emailed });
 }
 
 export async function GET(request: Request) {

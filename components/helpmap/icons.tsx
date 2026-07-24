@@ -163,6 +163,29 @@ export const ICON = {
       <path d="M4.5 21h15" />
     </svg>
   ),
+  // Fold the bottom sheet down to a strip (chevron toward a floor line) and back up.
+  foldDown: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m7 9 5 5 5-5" />
+      <path d="M5 19h14" />
+    </svg>
+  ),
+  foldUp: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m7 15 5-5 5 5" />
+      <path d="M5 5h14" />
+    </svg>
+  ),
+  // Group of people — a civic initiative is organized neighbours, not a facility. Kept
+  // distinct from `volunteer` (hand + heart), which labels the "how to help" blocks.
+  users: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.5 20v-1.2A4.8 4.8 0 0 1 7.3 14h3.4a4.8 4.8 0 0 1 4.8 4.8V20" />
+      <path d="M16.4 5.2a3.2 3.2 0 0 1 0 5.6" />
+      <path d="M18.2 14.2a4.2 4.2 0 0 1 3.3 4.1V20" />
+    </svg>
+  ),
   // GPS crosshair — "center the map on my location" button.
   locate: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -180,6 +203,7 @@ export const TYPE_ICON: Record<LocationType, ReactNode> = {
   morgue: ICON.morgue,
   donation_centre: ICON.box,
   comedor: ICON.utensils,
+  iniciativa: ICON.users,
 };
 
 // Same glyphs as `TYPE_ICON`, as raw SVG markup strings — Leaflet map markers are built
@@ -196,6 +220,8 @@ export const TYPE_ICON_SVG: Record<LocationType, string> = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>',
   comedor:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3M6 12v9"/><path d="M18 3c-1.7 0-3 2-3 5s1 4 3 4v9"/></svg>',
+  iniciativa:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20v-1.2A4.8 4.8 0 0 1 7.3 14h3.4a4.8 4.8 0 0 1 4.8 4.8V20"/><path d="M16.4 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M18.2 14.2a4.2 4.2 0 0 1 3.3 4.1V20"/></svg>',
 };
 
 // Real (simplified, flat) flag icons for the language switcher — clearer at a glance than

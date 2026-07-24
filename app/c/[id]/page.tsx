@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { STATE_LABEL, TYPE_META } from "@/components/helpmap/data";
+import { ESTADO_META, STATE_LABEL, TYPE_META, type RefugioEstado } from "@/components/helpmap/data";
+import { estadoOf, refugioAgeDays, REFUGIO_STALE_DAYS } from "@/components/helpmap/helpers";
 import { fetchCenter } from "./fetchCenter";
 import CenterActions from "./CenterActions";
 
@@ -61,6 +62,18 @@ export default async function CenterPage({ params }: Params) {
   const type = TYPE_META[loc.type];
   const place = [loc.municipality, STATE_LABEL[loc.state]].filter(Boolean).join(" · ");
   const recibe = ref?.recibe ?? [];
+  // Operating status + how old the record is. A shared link outlives the moment it was
+  // shared, so a page that omits "this point closed" / "this is 3 weeks old" is worse
+  // than useless — it's confidently wrong (see db/refugios_estado.sql).
+  const estado = estadoOf(ref);
+  const updIso = ref?.updated_at || ref?.last_confirmed_at || null;
+  const updDays = refugioAgeDays(ref);
+  const stale = updDays != null && updDays >= REFUGIO_STALE_DAYS;
+  const EST_STYLE: Record<RefugioEstado, React.CSSProperties> = {
+    abierto: { color: "#065f46", background: "#d1fae5", borderColor: "#a7f3d0" },
+    lleno: { color: "#92400e", background: "#fef3c7", borderColor: "#fcd34d" },
+    cerrado: { color: "#7f1d1d", background: "#fee2e2", borderColor: "#fecaca" },
+  };
 
   return (
     <div style={S.wrap}>
@@ -72,9 +85,30 @@ export default async function CenterPage({ params }: Params) {
             <span style={{ ...S.dot, background: type.color }} />
             {type.es}
           </span>
+          {estado && (
+            <span style={{ ...S.est, ...EST_STYLE[estado] }}>
+              {ESTADO_META[estado].es.toUpperCase()}
+            </span>
+          )}
           {ref?.es_animal && <span style={S.animal}>🐾 Refugio animal</span>}
           {place && <div style={S.place}>📍 {place}</div>}
         </div>
+
+        {/* Warnings BEFORE the needs: whether the point is still there outranks what it
+            needs. Closed is red; full and "this data is old" are amber. */}
+        {estado === "cerrado" && (
+          <div style={{ ...S.warn, ...S.warnClosed }}>
+            Este punto reportó estar CERRADO. No vayas sin confirmar antes.
+          </div>
+        )}
+        {estado === "lleno" && (
+          <div style={S.warn}>Este punto reportó estar LLENO / sin capacidad. Confirma antes de ir.</div>
+        )}
+        {estado !== "cerrado" && stale && (
+          <div style={{ ...S.warn, ...S.warnSoft }}>
+            Dato con varios días. Confirma por teléfono antes de ir.
+          </div>
+        )}
 
         {ref?.necesita && (
           <div style={{ ...S.needBox, borderColor: type.color }}>
@@ -131,6 +165,14 @@ export default async function CenterPage({ params }: Params) {
           phone={loc.contact_phone}
         />
 
+        {updIso && (
+          <div style={{ ...S.updated, ...(stale ? S.updatedOld : null) }}>
+            Actualizado{" "}
+            {updDays === 0 ? "hoy" : updDays === 1 ? "hace 1 día" : `hace ${updDays} días`} ·{" "}
+            {new Date(updIso).toLocaleDateString("es-VE")}
+          </div>
+        )}
+
         <a style={S.attrib} href="https://acopiove.org" target="_blank" rel="noopener noreferrer">
           Datos de refugios/acopios: AcopioVE (acopiove.org) · CC-BY 4.0
         </a>
@@ -148,6 +190,12 @@ const S: Record<string, React.CSSProperties> = {
   badge: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 11px", borderRadius: 999, border: "1px solid", background: "#fff" },
   dot: { width: 7, height: 7, borderRadius: "50%" },
   animal: { fontSize: 12, fontWeight: 600, color: "#7b818c" },
+  est: { display: "inline-flex", alignItems: "center", fontSize: 11, fontWeight: 800, letterSpacing: ".4px", padding: "4px 11px", borderRadius: 999, border: "1px solid" },
+  warn: { fontSize: 13, fontWeight: 700, lineHeight: 1.4, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 13, padding: "11px 13px", marginBottom: 12 },
+  warnClosed: { color: "#991b1b", background: "#fee2e2", borderColor: "#fca5a5" },
+  warnSoft: { fontWeight: 600, color: "#6b5416", background: "#fffaeb", borderColor: "#f2e6c4" },
+  updated: { marginTop: 14, textAlign: "center", fontSize: 11.5, color: "#9aa3af" },
+  updatedOld: { color: "#b45309", fontWeight: 700 },
   place: { fontSize: 13.5, color: "#7b818c" },
   needBox: { border: "1px solid", borderRadius: 15, padding: "14px 16px", marginBottom: 12, background: "#fffdf7" },
   needLabel: { fontSize: 10.5, letterSpacing: ".8px", fontWeight: 700, marginBottom: 6 },
